@@ -12,7 +12,35 @@ X402_PRICING: dict[str, float] = {
     "/api/predictions": 0.1,   # 0.1 USDC per prediction
     "/api/deposit": 0.0,        # free (user brings their own funds)
     "/api/withdraw": 0.5,       # 0.5 USDC withdrawal fee
+    "/api/insights": 0.5,       # 0.5 USDC per premium insight
 }
+
+
+async def verify_x402_payment(payment_header: str | None, path: str) -> bool:
+    """
+    Verify an x402 payment proof on Injective testnet.
+
+    In production, this would:
+    1. Parse the payment proof from the header
+    2. Call the Injective facilitator to verify on-chain
+    3. Check amount >= required price for the endpoint
+    4. Check the receipt hasn't been replayed (nonce/idempotency)
+
+    Returns True if payment is valid, False otherwise.
+
+    STUB: always returns True in dev mode.
+    """
+    required = X402_PRICING.get(path.rstrip("/"), 0.0)
+    if required == 0:
+        return True  # Free endpoint
+
+    if payment_header is None:
+        logger.warning("x402 payment missing for %s — allowing in dev mode", path)
+        return True  # In production: return False
+
+    # TODO: Real verification via Injective facilitator
+    logger.info("x402 payment header present for %s: %s...", path, payment_header[:20])
+    return True
 
 
 async def x402_middleware(request: Request, call_next: Callable) -> dict:

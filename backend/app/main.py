@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from app.api.matches import router as matches_router
 from app.api.predictions import router as predictions_router
 from app.api.wallet import router as wallet_router
+from app.api.insights import router as insights_router
 from app.core.config import get_settings
 
 # Configure logging
@@ -62,6 +63,7 @@ app.add_middleware(
 app.include_router(matches_router)
 app.include_router(predictions_router)
 app.include_router(wallet_router)
+app.include_router(insights_router)
 
 
 @app.get("/health")
