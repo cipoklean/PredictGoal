@@ -1,6 +1,72 @@
 @import "tailwindcss";
 
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-surface: #08090a;
+  --color-surface-elevated: #0f1011;
+  --color-surface-card: #16181a;
+  --color-border-default: #23252a;
+  --color-border-hover: #34343a;
+  --color-brand: #5e6ad2;
+  --color-brand-hover: #828fff;
+  --color-text-primary: #f7f8f8;
+  --color-text-secondary: #d0d6e0;
+  --color-text-tertiary: #8a8f98;
+  --color-text-muted: #62666d;
+  --color-green: #27a644;
+  --color-green-bright: #10b981;
+  --color-red: #ef4444;
+  --color-amber: #f59e0b;
+  --color-blue: #3b82f6;
 }
+
+/* Keyframes */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-in-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fade-in-down { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes shimmer { 0% { background-position: -300px 0; } 100% { background-position: 300px 0; } }
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(94, 106, 210, 0.3); } 100% { box-shadow: 0 0 0 8px rgba(94, 106, 210, 0); } }
+@keyframes live-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.4); } }
+
+/* Utilities */
+@utility animate-fade-in { animation: fade-in 0.4s ease-out; }
+@utility animate-fade-in-up { animation: fade-in-up 0.5s ease-out; }
+@utility animate-fade-in-down { animation: fade-in-down 0.35s ease-out; }
+@utility animate-scale-in { animation: scale-in 0.3s ease-out; }
+@utility animate-live { animation: live-dot 1.5s infinite; }
+@utility animate-breathe { animation: breathe 2s infinite; }
+
+@utility skeleton {
+  background: linear-gradient(90deg, #16181a 25%, #1e2024 50%, #16181a 75%);
+  background-size: 600px 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Global resets */
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #08090a; }
+::-webkit-scrollbar-thumb { background: #23252a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #34343a; }
+
+::selection { background: rgba(94, 106, 210, 0.25); color: #f7f8f8; }
+
+/* Number input — hide spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }

@@ -10,14 +10,23 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# In-memory cache: {match_id: MatchResponse}
-_match_cache: dict = {}
+# In-memory cache
+_cached_matches: list[dict] | None = None
 _cache_updated_at: datetime | None = None
-CACHE_TTL_SECONDS = 60
+CACHE_TTL_SECONDS = 60  # refresh from API every 60s
 
 
 async def fetch_upcoming_matches() -> list[dict]:
-    """Fetch World Cup matches from football-data.org."""
+    """Fetch World Cup matches from football-data.org with 60s in-memory cache."""
+    global _cached_matches, _cache_updated_at
+    now = datetime.now(timezone.utc)
+
+    # Return cached data if still fresh
+    if _cached_matches is not None and _cache_updated_at is not None:
+        age = (now - _cache_updated_at).total_seconds()
+        if age < CACHE_TTL_SECONDS:
+            return _cached_matches
+
     if not settings.FOOTBALL_DATA_API_KEY:
         logger.warning("FOOTBALL_DATA_API_KEY not set — returning placeholder matches")
         return _placeholder_matches()
@@ -30,9 +39,18 @@ async def fetch_upcoming_matches() -> list[dict]:
             response = await client.get(url, headers=headers)
             response.raise_for_status()
             data = response.json()
-            return _parse_matches(data.get("matches", []))
+            parsed = _parse_matches(data.get("matches", []))
+            # Update cache on success
+            _cached_matches = parsed
+            _cache_updated_at = now
+            logger.info("Match cache refreshed: %d matches", len(parsed))
+            return parsed
         except httpx.HTTPError as exc:
             logger.error("Failed to fetch match data: %s", exc)
+            # Return cached data if available, else fallback to placeholders
+            if _cached_matches is not None:
+                logger.info("Returning stale cached data for matches (%d matches)", len(_cached_matches))
+                return _cached_matches
             return _placeholder_matches()
 
 
