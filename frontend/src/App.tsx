@@ -21,7 +21,6 @@ function Navbar({
   balance: number | null;
 }) {
   const location = useLocation();
-
   const links = [
     { to: "/", label: "Matches" },
     { to: "/leaderboard", label: "Leaderboard" },
@@ -29,46 +28,38 @@ function Navbar({
   ];
 
   return (
-    <nav
-      className="sticky top-0 z-50 border-b border-[#1e1e22]"
-      style={{ background: "rgba(8,9,10,0.82)", backdropFilter: "blur(20px)" }}
-    >
-      <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-14">
-        <Link
-          to="/"
-          className="flex items-center gap-2.5 text-[#f7f8f8] font-semibold text-[15px] tracking-tight hover:opacity-90 transition"
-        >
-          <span className="w-7 h-7 rounded-lg bg-[#5e6ad2] flex items-center justify-center text-white text-xs font-bold">
+    <nav className="sticky top-0 z-50 border-b border-[rgba(83,58,253,0.1)]"
+      style={{ background: "rgba(10,11,20,0.85)", backdropFilter: "blur(24px)" }}>
+      <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-16">
+        <Link to="/" className="flex items-center gap-3 text-[#e8eaf0] font-semibold text-base tracking-tight hover:opacity-90 transition">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#533afd] to-[#7b6ff0] flex items-center justify-center text-white text-sm font-bold shadow-[0_0_16px_rgba(83,58,253,0.3)]">
             P
-          </span>
-          PredictGoal
+          </div>
+          <span className="hidden sm:inline">PredictGoal</span>
         </Link>
+
         <div className="flex items-center gap-1">
           {links.map((link) => (
             <Link
               key={link.to}
               to={link.to}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all duration-150 ${
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                 location.pathname === link.to
-                  ? "bg-[#16181a] text-[#f7f8f8]"
-                  : "text-[#8a8f98] hover:text-[#d0d6e0] hover:bg-[rgba(255,255,255,0.03)]"
+                  ? "bg-[rgba(83,58,253,0.12)] text-[#a89ffa]"
+                  : "text-[#7b7f92] hover:text-[#e8eaf0] hover:bg-[rgba(255,255,255,0.03)]"
               }`}
             >
               {link.label}
             </Link>
           ))}
+
           {walletAddress && balance !== null && (
-            <span className="text-[12px] font-medium text-[#27a644] mr-1 font-mono tabular-nums">
+            <span className="text-xs font-semibold text-[#15be53] bg-[rgba(21,190,83,0.1)] border border-[rgba(21,190,83,0.2)] rounded-lg px-2.5 py-1 font-mono tabular-nums mr-2 animate-count-up">
               {balance.toFixed(1)} USDC
             </span>
           )}
-          <div className="ml-3">
-            <ConnectWallet
-              address={walletAddress}
-              onConnect={onConnect}
-              onDisconnect={onDisconnect}
-            />
-          </div>
+
+          <ConnectWallet address={walletAddress} onConnect={onConnect} onDisconnect={onDisconnect} />
         </div>
       </div>
     </nav>
@@ -95,7 +86,7 @@ export default function App() {
 
   const handleConnect = (addr: string) => {
     setWalletAddress(addr);
-    updateApiWallet(addr); // so all API calls send the connected address
+    updateApiWallet(addr);
     fetchBalance(addr);
   };
 
@@ -106,14 +97,9 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-[#08090a] text-[#d0d6e0]">
-        <Navbar
-          walletAddress={walletAddress}
-          onConnect={handleConnect}
-          onDisconnect={handleDisconnect}
-          balance={balance}
-        />
-        <main className="py-8">
+      <div className="min-h-screen bg-[#0a0b14] text-[#e8eaf0]">
+        <Navbar walletAddress={walletAddress} onConnect={handleConnect} onDisconnect={handleDisconnect} balance={balance} />
+        <main className="py-10">
           <Routes>
             <Route path="/" element={<MatchesPage />} />
             <Route path="/matches/:id" element={<MatchDetailPage />} />
@@ -121,7 +107,7 @@ export default function App() {
             <Route path="/wallet" element={<WalletPage />} />
           </Routes>
         </main>
-        <footer className="text-center text-[#62666d] text-[11px] py-6 border-t border-[#1e1e22]">
+        <footer className="text-center text-[#4d5063] text-xs py-8 border-t border-[rgba(83,58,253,0.08)]">
           PredictGoal &middot; Injective Global Cup Hackathon &middot; Testnet Only &middot; No Real Funds
         </footer>
       </div>
