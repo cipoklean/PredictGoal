@@ -51,42 +51,58 @@ export default function LeaderboardPage() {
       ) : (
         <div className="rounded-xl border border-[#23252a] bg-[#0f1011] overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-[48px_1fr_100px_100px_100px_80px] gap-4 px-5 py-3 border-b border-[#23252a] text-[11px] font-semibold text-[#8a8f98] uppercase tracking-wider">
+          <div className="hidden sm:grid grid-cols-[48px_1fr_80px_80px_80px_64px_48px] gap-3 px-5 py-3 border-b border-[#23252a] text-[11px] font-semibold text-[#8a8f98] uppercase tracking-wider">
             <div>#</div>
             <div>Player</div>
             <div className="text-right">Wagered</div>
             <div className="text-right">Won</div>
             <div className="text-right">Win Rate</div>
             <div className="text-right">Picks</div>
+            <div className="text-right">Streak</div>
           </div>
 
           {/* Table body */}
-          {entries.map((e, i) => (
+          {entries.map((e, i) => {
+            const streak = e.predictions_count >= 3 && e.win_rate > 0.5 ? "🔥" : e.win_rate > 0.3 ? "📈" : "—";
+            return (
             <div
               key={e.rank}
-              className="grid grid-cols-[48px_1fr_100px_100px_100px_80px] gap-4 px-5 py-3 border-b border-[#23252a]/50 hover:bg-[rgba(255,255,255,0.01)] transition"
+              className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-[48px_1fr_80px_80px_80px_64px_48px] gap-2 sm:gap-3 px-4 sm:px-5 py-3 border-b border-[#23252a]/50 hover:bg-[rgba(255,255,255,0.01)] transition"
               style={{ animationDelay: `${i * 30}ms` }}
             >
               <div className="text-[#f7f8f8] font-bold text-sm">
                 {e.rank <= 3 ? ["🥇", "🥈", "🥉"][e.rank - 1] : e.rank}
               </div>
-              <div className="text-[#d0d6e0] text-sm font-medium truncate font-mono tabular-nums">
+              {/* Mobile: stacked info */}
+              <div className="sm:hidden flex flex-col">
+                <span className="text-[#d0d6e0] text-sm font-medium truncate font-mono">
+                  {e.user_address.slice(0, 6)}...{e.user_address.slice(-4)}
+                </span>
+                <span className="text-[12px] text-[#62666d]">
+                  {e.total_wagered.toFixed(1)} wagered &middot; {e.total_won.toFixed(1)} won &middot; {(e.win_rate * 100).toFixed(0)}% &middot; {e.predictions_count} picks
+                </span>
+              </div>
+              {/* Desktop columns */}
+              <div className="hidden sm:block text-[#d0d6e0] text-sm font-medium truncate font-mono tabular-nums">
                 {e.user_address.slice(0, 8)}...{e.user_address.slice(-4)}
               </div>
-              <div className="text-right text-[#d0d6e0] text-sm tabular-nums">
+              <div className="hidden sm:block text-right text-[#d0d6e0] text-sm tabular-nums">
                 {e.total_wagered.toFixed(1)}
               </div>
-              <div className="text-right text-[#27a644] text-sm font-medium tabular-nums">
+              <div className="hidden sm:block text-right text-[#27a644] text-sm font-medium tabular-nums">
                 {e.total_won.toFixed(1)}
               </div>
-              <div className="text-right text-[#f59e0b] text-sm tabular-nums">
+              <div className="hidden sm:block text-right text-[#f59e0b] text-sm tabular-nums">
                 {(e.win_rate * 100).toFixed(1)}%
               </div>
-              <div className="text-right text-[#62666d] text-sm tabular-nums">
+              <div className="hidden sm:block text-right text-[#62666d] text-sm tabular-nums">
                 {e.predictions_count}
               </div>
+              <div className="text-right text-sm tabular-nums">
+                {streak}
+              </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
     </div>

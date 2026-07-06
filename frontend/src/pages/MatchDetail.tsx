@@ -128,19 +128,41 @@ export default function MatchDetailPage() {
           <h2 className="text-[13px] font-semibold text-[#8a8f98] uppercase tracking-wider mb-4">Win Probabilities</h2>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Home", prob: analytics.win_prob_home, color: "bg-[#27a644]" },
-              { label: "Draw", prob: analytics.win_prob_draw, color: "bg-[#f59e0b]" },
-              { label: "Away", prob: analytics.win_prob_away, color: "bg-[#3b82f6]" },
-            ].map(({ label, prob, color }) => (
-              <div key={label} className="text-center">
-                <div className="text-[11px] text-[#8a8f98] font-medium mb-1.5 uppercase tracking-wider">{label}</div>
-                <div className="text-2xl font-bold text-[#f7f8f8] tabular-nums">{(prob * 100).toFixed(1)}%</div>
+              { label: "Home", prob: analytics.win_prob_home, color: "bg-[#27a644]", glow: "shadow-[0_0_12px_rgba(39,166,68,0.3)]" },
+              { label: "Draw", prob: analytics.win_prob_draw, color: "bg-[#f59e0b]", glow: "shadow-[0_0_12px_rgba(245,158,11,0.3)]" },
+              { label: "Away", prob: analytics.win_prob_away, color: "bg-[#3b82f6]", glow: "shadow-[0_0_12px_rgba(59,130,246,0.3)]" },
+            ].map(({ label, prob, color, glow }) => {
+              const maxProb = Math.max(
+                analytics.win_prob_home,
+                analytics.win_prob_draw,
+                analytics.win_prob_away
+              );
+              const isFavored = prob === maxProb && maxProb > 0;
+              return (
+              <div
+                key={label}
+                className={`text-center rounded-lg p-2 transition-all duration-500 ${
+                  isFavored ? `${glow} bg-[rgba(255,255,255,0.02)]` : ""
+                }`}
+              >
+                <div className="text-[11px] text-[#8a8f98] font-medium mb-1.5 uppercase tracking-wider">
+                  {label}{isFavored && " ☆"}
+                </div>
+                <div className={`text-2xl font-bold tabular-nums transition-colors duration-500 ${
+                  isFavored ? "text-[#f7f8f8]" : "text-[#d0d6e0]"
+                }`}>
+                  {(prob * 100).toFixed(1)}%
+                </div>
                 <div className="mt-2 h-1.5 rounded-full bg-[#23252a] overflow-hidden">
-                  <div className={`h-full rounded-full ${color} transition-all duration-500`}
-                    style={{ width: `${prob * 100}%` }} />
+                  <div
+                    className={`h-full rounded-full ${color} transition-all duration-500 ${
+                      isFavored ? "animate-pulse" : ""
+                    }`}
+                    style={{ width: `${prob * 100}%` }}
+                  />
                 </div>
               </div>
-            ))}
+            )})}
           </div>
           {analytics.key_stats && (
             <div className="mt-4 pt-4 border-t border-[#23252a] grid grid-cols-2 gap-2 text-[12px]">

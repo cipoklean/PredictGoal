@@ -26,6 +26,17 @@ function flagUrl(code: string): string {
   return code ? `https://flagcdn.com/w40/${code}.png` : "";
 }
 
+function countdown(utc: string): string {
+  const diff = new Date(utc).getTime() - Date.now();
+  if (diff <= 0) return "Kickoff";
+  const d = Math.floor(diff / 86400000);
+  const h = Math.floor((diff % 86400000) / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 type Filter = "all" | "live" | "upcoming" | "finished";
 
 export default function MatchesPage() {
@@ -33,6 +44,13 @@ export default function MatchesPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [, setTick] = useState(0);
+
+  // Tick every 30s to update countdowns
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     api.getMatches()
@@ -51,7 +69,7 @@ export default function MatchesPage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto px-6 animate-fade-in-up">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 animate-fade-in-up">
         <div className="h-8 w-48 skeleton rounded mb-6" />
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -64,7 +82,7 @@ export default function MatchesPage() {
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto px-6 animate-fade-in-up">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 animate-fade-in-up">
         <div className="rounded-xl border border-[#23252a] bg-[#16181a] p-8 text-center">
           <p className="text-[#ef4444] text-sm font-medium">Failed to load matches</p>
           <p className="text-[#62666d] text-xs mt-1">{error}</p>
@@ -81,19 +99,21 @@ export default function MatchesPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 animate-fade-in-up">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 animate-fade-in-up">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-semibold text-[#f7f8f8] tracking-tight">Matches</h1>
-        <span className="text-[13px] text-[#62666d] font-medium">{counts.live} live &middot; {counts.upcoming} upcoming</span>
+        <span className="text-[13px] text-[#62666d] font-medium">
+          {counts.live} live &middot; {counts.upcoming} upcoming
+        </span>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 mb-6">
+      {/* Filter tabs — scrollable on mobile */}
+      <div className="flex gap-1 mb-6 overflow-x-auto pb-1 -mx-1 px-1">
         {(["all", "live", "upcoming", "finished"] as Filter[]).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all duration-150 capitalize ${
+            className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all duration-150 capitalize whitespace-nowrap ${
               filter === f
                 ? "bg-[#16181a] text-[#f7f8f8]"
                 : "text-[#8a8f98] hover:text-[#d0d6e0]"
@@ -114,46 +134,60 @@ export default function MatchesPage() {
           {filtered.map((m, i) => {
             const homeFlag = flagUrl(COUNTRY_FLAGS[m.home_team] || "");
             const awayFlag = flagUrl(COUNTRY_FLAGS[m.away_team] || "");
+            const isLive = m.status === "live";
+            const isUpcoming = m.status === "scheduled";
+            const countdownText = countdown(m.kickoff_utc);
 
             return (
               <Link
                 key={m.match_id}
                 to={`/matches/${m.match_id}`}
-                className="block rounded-xl border border-[#23252a] bg-[#0f1011] hover:bg-[#141518] hover:border-[#34343a] transition-all duration-200 animate-fade-in-up"
+                className={`block rounded-xl border transition-all duration-200 animate-fade-in-up hover:border-[#34343a] cursor-pointer ${
+                  isLive
+                    ? "border-[#ef4444]/20 bg-[#0f1011] hover:bg-[#141518]"
+                    : "border-[#23252a] bg-[#0f1011] hover:bg-[#141518]"
+                }`}
                 style={{ animationDelay: `${i * 40}ms` }}
               >
-                <div className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[15px] font-medium text-[#f7f8f8] truncate flex items-center gap-1.5">
-                        {homeFlag && <img src={homeFlag} alt="" className="w-5 h-3.5 rounded-sm opacity-80" />}
-                        {m.home_team}
-                      </span>
-                      <span className="text-[#62666d] text-[13px] font-medium">vs</span>
-                      <span className="text-[15px] font-medium text-[#f7f8f8] truncate flex items-center gap-1.5">
-                        {m.away_team}
-                        {awayFlag && <img src={awayFlag} alt="" className="w-5 h-3.5 rounded-sm opacity-80" />}
-                      </span>
-                    </div>
+                <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  {/* Teams + score */}
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                    <span className="text-[15px] font-medium text-[#f7f8f8] truncate flex items-center gap-1.5">
+                      {homeFlag && <img src={homeFlag} alt="" className="w-5 h-3.5 rounded-sm opacity-80 flex-shrink-0" />}
+                      <span className="truncate">{m.home_team}</span>
+                    </span>
+                    <span className="text-[#62666d] text-[13px] font-medium flex-shrink-0">vs</span>
+                    <span className="text-[15px] font-medium text-[#f7f8f8] truncate flex items-center gap-1.5">
+                      <span className="truncate">{m.away_team}</span>
+                      {awayFlag && <img src={awayFlag} alt="" className="w-5 h-3.5 rounded-sm opacity-80 flex-shrink-0" />}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-4 flex-shrink-0">
-                    {m.home_score !== null && m.away_score !== null && (
+
+                  {/* Right side: score + status + time */}
+                  <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+                    {m.home_score !== null && m.away_score !== null ? (
                       <span className="text-lg font-semibold text-[#f7f8f8] tabular-nums">
                         {m.home_score} <span className="text-[#8a8f98]">—</span> {m.away_score}
                       </span>
-                    )}
+                    ) : isUpcoming ? (
+                      <span className="text-[13px] font-medium text-[#7170ff] tabular-nums animate-pulse">
+                        ⏳ {countdownText}
+                      </span>
+                    ) : null}
+
                     <span className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${
-                      m.status === "live"
-                        ? "bg-[#ef4444]/10 text-[#ef4444]"
-                        : m.status === "finished"
-                        ? "bg-[#62666d]/10 text-[#62666d]"
+                      isLive ? "bg-[#ef4444]/10 text-[#ef4444]"
+                        : m.status === "finished" ? "bg-[#62666d]/10 text-[#62666d]"
                         : "bg-[#5e6ad2]/10 text-[#7170ff]"
                     }`}>
-                      {m.status === "live" && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#ef4444] mr-1.5 animate-live align-middle" />}
+                      {isLive && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#ef4444] mr-1.5 animate-live align-middle" />}
                       {m.status}
                     </span>
-                    <span className="text-[12px] text-[#62666d] w-20 text-right tabular-nums">
-                      {new Date(m.kickoff_utc).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+
+                    <span className="text-[12px] text-[#62666d] w-20 text-right tabular-nums hidden sm:inline">
+                      {new Date(m.kickoff_utc).toLocaleDateString("en-US", {
+                        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                      })}
                     </span>
                   </div>
                 </div>
