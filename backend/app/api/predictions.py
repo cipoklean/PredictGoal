@@ -128,16 +128,9 @@ async def place_prediction(request: Request, body: PredictionCreate):
     if body.stake_usdc > 100:
         raise HTTPException(status_code=400, detail="Maximum stake is 100 USDC")
 
-    # Knockout-stage draw handling: if match is in knockout stage and user bets draw, reject
-    # We infer knockout from match ID ranges: WC2026-M49+ are knockout (Round of 32+)
-    match_num = int(body.match_id.split("-M")[-1]) if "-M" in body.match_id else 0
-    is_knockout = match_num >= 49
-    if is_knockout and body.outcome.value == "draw":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Draw is not a valid outcome for knockout-stage matches. "
-                   "Bet on the winning team (home or away). Extra time + penalties will decide.",
-        )
+    # All outcomes (home/draw/away) are valid for all matches — including knockout.
+    # Bets settle on the 90-minute result, not extra time or penalties.
+    # This matches how real sportsbooks handle World Cup knockout matches.
 
     # Atomic per-user prediction placement (prevents race conditions)
     user_lock = await _get_user_lock(user_address)

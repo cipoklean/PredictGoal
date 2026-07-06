@@ -4,9 +4,13 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
+from app.core.config import get_settings
+
+settings = get_settings()
 
 # Default test headers
 PRED_HEADERS = {"X-User-Address": "inj1testuser0000000000000000000000"}
+SETTLE_HEADERS = {"X-Admin-Key": settings.ADMIN_SETTLE_KEY or "test-key"}
 
 
 @pytest.fixture
@@ -143,23 +147,23 @@ async def test_place_prediction_exceeds_max_stake(client):
 
 
 @pytest.mark.asyncio
-async def test_knockout_draw_rejected(client):
-    """Draw bets on knockout-stage matches should be rejected."""
-    # Try several knockout match IDs until we find one that's not finished
-    for mid in ["WC2026-M97", "WC2026-M98", "WC2026-M90"]:
+async def test_knockout_draw_allowed(client):
+    """Draw bets on knockout-stage matches should be ALLOWED (90-min result)."""
+    # Try several knockout match IDs until we find one that's scheduled
+    for mid in ["WC2026-M97", "WC2026-M98", "WC2026-M90", "WC2026-M49"]:
         body = {
             "match_id": mid,
             "outcome": "draw",
             "stake_usdc": 5.0,
         }
         response = await client.post("/api/predictions", json=body, headers=PRED_HEADERS)
-        # Accept 400 (rejected — either finished or knockout draw) or 404 (not found)
-        if response.status_code == 400:
-            detail = response.json()["detail"].lower()
-            assert "draw" in detail or "finished" in detail or "live" in detail
+        # 201 = accepted, 400 = match finished/live (not open), 404 = not found
+        if response.status_code == 201:
+            data = response.json()
+            assert data["outcome"] == "draw"
             return
-    # If all matches returned 404, that's OK — test passes (no knockout matches available)
-    assert response.status_code == 404
+    # If all matches are closed or not found, test passes (no open knockout matches)
+    assert response.status_code in (400, 404)
 
 
 @pytest.mark.asyncio
@@ -209,7 +213,7 @@ async def test_settle_success(client):
     response = await client.post(
         "/api/predictions/settle",
         json={"match_id": "WC2026-M4", "home_score": 2, "away_score": 0},
-        headers={"X-Admin-Key": "dev-settle-key-change-me"},
+        headers=SETTLE_HEADERS,
     )
     assert response.status_code == 200
     data = response.json()
@@ -219,7 +223,7 @@ async def test_settle_success(client):
 @pytest.mark.asyncio
 async def test_settle_idempotent(client):
     """Settling twice should return already_settled."""
-    headers = {"X-Admin-Key": "dev-settle-key-change-me"}
+    headers = SETTLE_HEADERS
     # First settlement
     await client.post(
         "/api/predictions/settle",
