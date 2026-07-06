@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from app.schemas.match import PredictionCreate, PredictionResponse, LeaderboardEntry
 from app.services.worldcup import fetch_upcoming_matches
+from app.services.balance import get_balance, debit as debit_balance
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -135,6 +136,12 @@ async def place_prediction(request: Request, body: PredictionCreate):
     # Atomic per-user prediction placement (prevents race conditions)
     user_lock = await _get_user_lock(user_address)
     async with user_lock:
+        # Deduct from balance (thread-safe, raises if insufficient)
+        try:
+            debit_balance(user_address, body.stake_usdc)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
         # Create prediction record
         prediction_id = uuid.uuid4()
         tx_hash = f"x402_tx_{prediction_id.hex[:12]}"
@@ -183,17 +190,14 @@ async def get_my_predictions(request: Request):
 
 @router.get("/leaderboard", response_model=list[LeaderboardEntry])
 async def get_leaderboard():
-    """Get global prediction leaderboard (SETTLED predictions only)."""
+    """Get global prediction leaderboard — includes all predictions (testnet)."""
     async with _predictions_lock:
         all_preds = list(_predictions.values())
 
-    # Only include settled predictions in leaderboard
+    # Include ALL predictions (not just settled) since testnet has no auto-settlement
     user_stats: dict[str, dict] = {}
 
     for p in all_preds:
-        if not p["settled"]:
-            continue  # Skip unsettled — only settled predictions count
-
         addr = p["user_address"]
         if addr not in user_stats:
             user_stats[addr] = {
@@ -206,7 +210,7 @@ async def get_leaderboard():
         stats["total_wagered"] += p["stake_usdc"]
         stats["predictions_count"] += 1
         payout = p.get("payout_usdc") or 0
-        if payout > 0:
+        if p["settled"] and payout > 0:
             stats["total_won"] += payout
 
     # Sort by total won descending

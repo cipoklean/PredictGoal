@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import ConnectWallet from "./components/ConnectWallet";
 import { setWalletAddress as updateApiWallet } from "./api";
@@ -94,6 +94,13 @@ export default function App() {
     setWalletAddress("");
     setBalance(null);
   };
+
+  // Poll balance every 10s while wallet is connected
+  useEffect(() => {
+    if (!walletAddress) return;
+    const interval = setInterval(() => fetchBalance(walletAddress), 10000);
+    return () => clearInterval(interval);
+  }, [walletAddress, fetchBalance]);
 
   return (
     <BrowserRouter>

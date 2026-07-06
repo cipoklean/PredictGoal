@@ -19,7 +19,7 @@ export default function MatchDetailPage() {
     key_stats: Record<string, unknown>;
   } | null>(null);
   const [outcome, setOutcome] = useState("home");
-  const [stake, setStake] = useState(1);
+  const [stake, setStake] = useState("1");
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState<"success" | "error">("success");
@@ -36,12 +36,14 @@ export default function MatchDetailPage() {
 
   const placePrediction = async () => {
     if (!id) return;
+    const stakeNum = parseFloat(stake) || 0;
+    if (stakeNum <= 0) return;
     setSubmitting(true); setMsg("");
     try {
-      const result = await api.placePrediction({ match_id: id, outcome, stake_usdc: stake });
+      const result = await api.placePrediction({ match_id: id, outcome, stake_usdc: stakeNum });
       setMsgType("success");
       setMsg(`Prediction placed! ${result.stake_usdc} USDC on ${result.outcome.toUpperCase()}`);
-      setStake(1);
+      setStake("1");
     } catch (e: unknown) {
       setMsgType("error");
       setMsg(e instanceof Error ? e.message : "Unknown error");
@@ -202,16 +204,16 @@ export default function MatchDetailPage() {
           <div className="flex gap-2">
             <div className="flex-1 relative">
               <input
-                type="number" min={0.1} max={100} step={0.1}
+                type="text" inputMode="decimal" minLength={1}
                 value={stake}
-                onChange={(e) => setStake(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setStake(e.target.value || "0")}
                 className="w-full rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(83,58,253,0.12)] px-4 py-3 text-sm font-semibold text-[#e8eaf0] outline-none focus:border-[#533afd] focus:ring-2 focus:ring-[#533afd]/20 transition-all duration-200"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#4d5063]">USDC</span>
             </div>
             <button
               onClick={placePrediction}
-              disabled={submitting || stake <= 0}
+              disabled={submitting || parseFloat(stake) <= 0}
               className="bg-gradient-to-br from-[#533afd] to-[#7b6ff0] hover:from-[#4434d4] hover:to-[#6b5fe0] disabled:from-[#1e2140] disabled:to-[#1e2140] disabled:text-[#4d5063] text-white text-sm font-bold px-6 rounded-xl transition-all duration-200 active:scale-[0.97] shadow-[0_0_20px_rgba(83,58,253,0.25)] hover:shadow-[0_0_28px_rgba(83,58,253,0.4)]"
             >
               {submitting ? "Placing..." : "Predict"}
