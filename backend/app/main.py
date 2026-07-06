@@ -19,6 +19,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Rate limiting (optional — graceful fallback if slowapi not installed)
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+    _has_rate_limiter = True
+    logger.info("Rate limiting enabled (slowapi)")
+except ImportError:
+    limiter = None
+    _has_rate_limiter = False
+    logger.warning("slowapi not installed — rate limiting disabled")
+
 # Create FastAPI app
 app = FastAPI(
     title="PredictGoal — Prediction Market API",
@@ -32,6 +44,11 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# Attach rate limiter if available
+if _has_rate_limiter:
+    app.state.limiter = limiter
+    app.add_exception_handler(429, _rate_limit_exceeded_handler)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -40,12 +57,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Rate limiting (TODO: enable via slowapi)
-# from slowapi import Limiter, _rate_limit_exceeded_handler
-# limiter = Limiter(key_func=get_remote_address)
-# app.state.limiter = limiter
-# app.add_exception_handler(429, _rate_limit_exceeded_handler)
 
 # Register routers
 app.include_router(matches_router)

@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     X402_PAYMENT_RECIPIENT: str = ""
     X402_PROTOCOL_FEE_BPS: int = 50
 
+    # Admin
+    ADMIN_SETTLE_KEY: str = ""
+
     # World Cup Data
     FOOTBALL_DATA_API_KEY: str = ""
     FOOTBALL_DATA_COMPETITION_CODE: str = "WC"
@@ -45,12 +48,11 @@ class Settings(BaseSettings):
 
     # Security
     JWT_SECRET_KEY: str = ""
+    ADMIN_SETTLE_KEY: str = "dev-settle-key-change-me"
+    ADMIN_WALLET_ADDRESS: str = ""
 
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
-
-    # Admin (for settlement)
-    ADMIN_WALLET_ADDRESS: str = ""
+    CORS_ORIGINS: List[str] = ["http://localhost:5173"]
 
 
 @lru_cache
