@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, Match } from "../api";
+import { api } from "../api";
+import type { Match } from "../api";
 
 export default function MatchesPage() {
   const [matches, setMatches] = useState<Match[]>([]);
