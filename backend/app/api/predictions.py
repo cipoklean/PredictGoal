@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from app.schemas.match import PredictionCreate, PredictionResponse, LeaderboardEntry
 from app.services.worldcup import fetch_upcoming_matches
 from app.services.balance import get_balance, debit as debit_balance
+from app.services import x402 as x402_service
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)

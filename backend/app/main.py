@@ -11,6 +11,7 @@ from app.api.predictions import router as predictions_router
 from app.api.wallet import router as wallet_router
 from app.api.insights import router as insights_router
 from app.core.config import get_settings
+from app.services import x402 as x402_service
 
 # Configure logging
 settings = get_settings()
@@ -49,6 +50,11 @@ app = FastAPI(
 if _has_rate_limiter:
     app.state.limiter = limiter
     app.add_exception_handler(429, _rate_limit_exceeded_handler)
+
+# Initialize x402 payment verification (testnet)
+if settings.X402_PAYMENT_RECIPIENT:
+    x402_service.load_config(settings.X402_PAYMENT_RECIPIENT)
+    logger.info("x402 payment verification enabled (testnet)")
 
 # CORS
 app.add_middleware(

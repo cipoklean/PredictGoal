@@ -11,3 +11,4 @@ structlog>=25.1.0
 slowapi>=0.1.9
 redis>=5.2.0
 apscheduler>=3.11.0
+x402[evm,fastapi,httpx]>=2.14.0

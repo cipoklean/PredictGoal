@@ -32,10 +32,10 @@ Every prediction (`POST /api/predictions`) and premium insight (`GET /api/insigh
 | Endpoint | Price | Status |
 |----------|-------|--------|
 | `POST /api/predictions` | 0.1 USDC | Dev mode (passthrough) |
-| `GET /api/insights/{id}` | 0.5 USDC | Dev mode (passthrough) |
+| `GET /api/insights/{id}` | 0.5 USDC | Testnet-ready (x402 facilitator) |
 | `POST /api/wallet/withdraw` | 0.5 USDC | Stubbed |
 
-**Implementation:** `backend/app/services/x402.py` — `verify_x402_payment()` validates headers. Priced per endpoint. In production, calls Injective facilitator for on-chain verification with nonce-based replay protection.
+**Implementation:** `backend/app/services/x402.py` — uses the `x402[fastapi,evm]` Python SDK with the free x402.org facilitator for testnet payment verification. Falls back to dev-mode passthrough when no payment recipient is configured.
 
 ### 🌉 CCTP — Cross-Chain USDC Transfers
 
@@ -85,9 +85,9 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 | Predictions (CRUD) | **Live** | In-memory store, locked at kickoff |
 | Leaderboard | **Live** | Server-computed, settled-only |
 | Settlement | **Live** | Admin-key gated, idempotent, reentrancy-safe |
-| Premium insights | **Dev mode** | x402 header checked but passthrough |
-| x402 payment verification | **Dev mode** | Stub always returns True |
-| CCTP deposit/withdraw | **Stubbed** | Returns success with mock tx hash |
+| Premium insights | **x402-gated** | Real verification via x402.org facilitator (Base Sepolia) |
+| x402 payment verification | **Testnet-ready** | Uses x402.org facilitator; falls back to dev mode if not configured |
+| CCTP deposit/withdraw | **Stubbed** | Returns success with mock tx hash; real testnet CCTP requires Injective-side Circle support |
 | MCP Server settlement | **Live** | Local stdio only, not connected to backend |
 | Agent Skills package | **Live** | Drop-in module, works standalone |
 

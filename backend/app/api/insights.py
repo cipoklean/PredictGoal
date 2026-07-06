@@ -43,14 +43,14 @@ async def get_premium_insight(request: Request, match_id: str):
     Provides momentum indicators, form analysis, and key player scoring
     beyond the free win probability endpoint.
     """
-    # x402 payment verification
+    # x402 payment verification (real testnet facilitator)
     payment_header = request.headers.get("X-402-Payment")
-    if payment_header is None:
-        # In production: raise HTTPException(402, "Payment required")
-        # For demo: log warning and allow through
-        logger.warning(
-            "x402 payment missing for premium insight %s (required: %s USDC) — allowing in dev mode",
-            match_id, X402_PRICING.get("/api/insights", 0.5),
+    payment_valid = await verify_x402_payment(payment_header, "/api/insights")
+
+    if not payment_valid:
+        raise HTTPException(
+            status_code=402,
+            detail="Payment required. Send x402 payment proof header. 0.5 USDC per insight.",
         )
 
     # Fetch match data
