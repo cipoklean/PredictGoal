@@ -145,53 +145,72 @@ export default function MatchesPage() {
       {filter === "mybets" && (
         <div className="space-y-3">
           {predictions.length === 0 ? (
-            <div className="rounded-xl border border-[#23252a] bg-[#16181a] p-8 text-center">
-              <p className="text-[#8a8f98] text-sm">No bets placed yet</p>
+            <div className="rounded-xl border border-[#23252a] bg-[#0f1011] p-10 text-center">
+              <p className="text-[#8a8f98] text-sm font-medium">No bets placed yet</p>
               <p className="text-[#62666d] text-xs mt-1">Pick a match and place a prediction!</p>
             </div>
           ) : (
-            predictions.map((p, i) => (
-              <Link
-                key={p.prediction_id}
-                to={`/matches/${p.match_id}`}
-                className="block rounded-xl border border-[#23252a] bg-[#0f1011] hover:bg-[#141518] hover:border-[#34343a] transition-all duration-200 animate-fade-in-up"
-                style={{ animationDelay: `${i * 40}ms` }}
-              >
-                <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="bg-[#16181a] border border-[#23252a] rounded-md px-2.5 py-1 text-[13px] font-bold text-[#f7f8f8] uppercase tracking-wider">
-                      {p.outcome}
-                    </span>
-                    <div>
-                      <div className="text-[14px] font-medium text-[#d0d6e0]">{p.match_id}</div>
-                      <div className="text-[12px] text-[#62666d]">
-                        {new Date(p.placed_at).toLocaleDateString("en-US", {
-                          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                        })}
+            predictions.map((p, i) => {
+              const match = matches.find((m) => m.match_id === p.match_id);
+              const homeFlag = match ? flagUrl(COUNTRY_FLAGS[match.home_team] || "") : "";
+              const awayFlag = match ? flagUrl(COUNTRY_FLAGS[match.away_team] || "") : "";
+              return (
+                <Link
+                  key={p.prediction_id}
+                  to={`/matches/${p.match_id}`}
+                  className="block rounded-xl border border-[#23252a] bg-[#0f1011] hover:bg-[#141518] hover:border-[#34343a] transition-all duration-200 animate-fade-in-up"
+                  style={{ animationDelay: `${i * 40}ms` }}
+                >
+                  <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-[13px] font-bold uppercase tracking-wider ${
+                        p.outcome === "home" ? "bg-[#27a644]/15 text-[#27a644] border border-[#27a644]/20" :
+                        p.outcome === "draw" ? "bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/20" :
+                        "bg-[#3b82f6]/15 text-[#3b82f6] border border-[#3b82f6]/20"
+                      }`}>
+                        {p.outcome}
+                      </span>
+                      <div className="min-w-0">
+                        {match ? (
+                          <div className="text-[14px] font-semibold text-[#f7f8f8] flex items-center gap-1.5 truncate">
+                            {homeFlag && <img src={homeFlag} alt="" className="w-4 h-3 rounded-sm opacity-80 flex-shrink-0" />}
+                            <span className="truncate">{match.home_team}</span>
+                            <span className="text-[#62666d] text-[13px] font-medium flex-shrink-0">vs</span>
+                            <span className="truncate">{match.away_team}</span>
+                            {awayFlag && <img src={awayFlag} alt="" className="w-4 h-3 rounded-sm opacity-80 flex-shrink-0" />}
+                          </div>
+                        ) : (
+                          <div className="text-[14px] font-medium text-[#8a8f98]">{p.match_id}</div>
+                        )}
+                        <div className="text-[11px] text-[#62666d] mt-0.5">
+                          {new Date(p.placed_at).toLocaleDateString("en-US", {
+                            month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                          })}
+                        </div>
                       </div>
                     </div>
+                    <div className="flex items-center gap-4 flex-shrink-0">
+                      <span className="text-[15px] font-semibold text-[#f7f8f8] tabular-nums font-mono">
+                        {p.stake_usdc} USDC
+                      </span>
+                      <span className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${
+                        p.settled
+                          ? (p.payout_usdc ?? 0) > 0
+                            ? "bg-[#27a644]/10 text-[#27a644]"
+                            : "bg-[#ef4444]/10 text-[#ef4444]"
+                          : "bg-[#f59e0b]/10 text-[#f59e0b]"
+                      }`}>
+                        {p.settled
+                          ? (p.payout_usdc ?? 0) > 0
+                            ? `Won +${p.payout_usdc} USDC`
+                            : "Lost"
+                          : "Pending"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 flex-shrink-0">
-                    <span className="text-[15px] font-semibold text-[#f7f8f8] tabular-nums">
-                      {p.stake_usdc} USDC
-                    </span>
-                    <span className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${
-                      p.settled
-                        ? (p.payout_usdc ?? 0) > 0
-                          ? "bg-[#27a644]/10 text-[#27a644]"
-                          : "bg-[#ef4444]/10 text-[#ef4444]"
-                        : "bg-[#f59e0b]/10 text-[#f59e0b]"
-                    }`}>
-                      {p.settled
-                        ? (p.payout_usdc ?? 0) > 0
-                          ? `Won +${p.payout_usdc} USDC`
-                          : "Lost"
-                        : "Pending"}
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))
+                </Link>
+              );
+            })
           )}
         </div>
       )}
