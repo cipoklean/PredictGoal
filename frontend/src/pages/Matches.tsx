@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
-import type { Match } from "../api";
+import type { Match, Prediction } from "../api";
 
 const COUNTRY_FLAGS: Record<string, string> = {
   Argentina: "ar", Brazil: "br", Germany: "de", France: "fr",
@@ -37,10 +37,11 @@ function countdown(utc: string): string {
   return `${m}m`;
 }
 
-type Filter = "all" | "live" | "upcoming" | "finished";
+type Filter = "all" | "live" | "upcoming" | "finished" | "mybets";
 
 export default function MatchesPage() {
   const [matches, setMatches] = useState<Match[]>([]);
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -53,8 +54,10 @@ export default function MatchesPage() {
   }, []);
 
   useEffect(() => {
-    api.getMatches()
-      .then((res) => setMatches(res.matches))
+    Promise.all([
+      api.getMatches().then((res) => setMatches(res.matches)),
+      api.getMyPredictions().then(setPredictions),
+    ])
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -107,9 +110,9 @@ export default function MatchesPage() {
         </span>
       </div>
 
-      {/* Filter tabs — scrollable on mobile */}
+      {/* Filter tabs */}
       <div className="flex gap-1 mb-6 overflow-x-auto pb-1 -mx-1 px-1">
-        {(["all", "live", "upcoming", "finished"] as Filter[]).map((f) => (
+        {(["all", "live", "upcoming", "finished"] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -123,78 +126,146 @@ export default function MatchesPage() {
             <span className="ml-1.5 text-[#62666d]">{counts[f]}</span>
           </button>
         ))}
+        {predictions.length > 0 && (
+          <button
+            onClick={() => setFilter("mybets")}
+            className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-all duration-150 whitespace-nowrap ${
+              filter === "mybets"
+                ? "bg-[#5e6ad2]/20 text-[#7170ff] border border-[#5e6ad2]/30"
+                : "text-[#8a8f98] hover:text-[#d0d6e0]"
+            }`}
+          >
+            My Bets
+            <span className="ml-1.5 text-[#7170ff]">{predictions.length}</span>
+          </button>
+        )}
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="rounded-xl border border-[#23252a] bg-[#16181a] p-8 text-center">
-          <p className="text-[#8a8f98] text-sm">No {filter} matches</p>
-        </div>
-      ) : (
+      {/* My Bets view */}
+      {filter === "mybets" && (
         <div className="space-y-3">
-          {filtered.map((m, i) => {
-            const homeFlag = flagUrl(COUNTRY_FLAGS[m.home_team] || "");
-            const awayFlag = flagUrl(COUNTRY_FLAGS[m.away_team] || "");
-            const isLive = m.status === "live";
-            const isUpcoming = m.status === "scheduled";
-            const countdownText = countdown(m.kickoff_utc);
-
-            return (
+          {predictions.length === 0 ? (
+            <div className="rounded-xl border border-[#23252a] bg-[#16181a] p-8 text-center">
+              <p className="text-[#8a8f98] text-sm">No bets placed yet</p>
+              <p className="text-[#62666d] text-xs mt-1">Pick a match and place a prediction!</p>
+            </div>
+          ) : (
+            predictions.map((p, i) => (
               <Link
-                key={m.match_id}
-                to={`/matches/${m.match_id}`}
-                className={`block rounded-xl border transition-all duration-200 animate-fade-in-up hover:border-[#34343a] cursor-pointer ${
-                  isLive
-                    ? "border-[#ef4444]/20 bg-[#0f1011] hover:bg-[#141518]"
-                    : "border-[#23252a] bg-[#0f1011] hover:bg-[#141518]"
-                }`}
+                key={p.prediction_id}
+                to={`/matches/${p.match_id}`}
+                className="block rounded-xl border border-[#23252a] bg-[#0f1011] hover:bg-[#141518] hover:border-[#34343a] transition-all duration-200 animate-fade-in-up"
                 style={{ animationDelay: `${i * 40}ms` }}
               >
                 <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  {/* Teams + score */}
-                  <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                    <span className="text-[15px] font-medium text-[#f7f8f8] truncate flex items-center gap-1.5">
-                      {homeFlag && <img src={homeFlag} alt="" className="w-5 h-3.5 rounded-sm opacity-80 flex-shrink-0" />}
-                      <span className="truncate">{m.home_team}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="bg-[#16181a] border border-[#23252a] rounded-md px-2.5 py-1 text-[13px] font-bold text-[#f7f8f8] uppercase tracking-wider">
+                      {p.outcome}
                     </span>
-                    <span className="text-[#62666d] text-[13px] font-medium flex-shrink-0">vs</span>
-                    <span className="text-[15px] font-medium text-[#f7f8f8] truncate flex items-center gap-1.5">
-                      <span className="truncate">{m.away_team}</span>
-                      {awayFlag && <img src={awayFlag} alt="" className="w-5 h-3.5 rounded-sm opacity-80 flex-shrink-0" />}
-                    </span>
+                    <div>
+                      <div className="text-[14px] font-medium text-[#d0d6e0]">{p.match_id}</div>
+                      <div className="text-[12px] text-[#62666d]">
+                        {new Date(p.placed_at).toLocaleDateString("en-US", {
+                          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                        })}
+                      </div>
+                    </div>
                   </div>
-
-                  {/* Right side: score + status + time */}
-                  <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-                    {m.home_score !== null && m.away_score !== null ? (
-                      <span className="text-lg font-semibold text-[#f7f8f8] tabular-nums">
-                        {m.home_score} <span className="text-[#8a8f98]">—</span> {m.away_score}
-                      </span>
-                    ) : isUpcoming ? (
-                      <span className="text-[13px] font-medium text-[#7170ff] tabular-nums animate-pulse">
-                        ⏳ {countdownText}
-                      </span>
-                    ) : null}
-
-                    <span className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${
-                      isLive ? "bg-[#ef4444]/10 text-[#ef4444]"
-                        : m.status === "finished" ? "bg-[#62666d]/10 text-[#62666d]"
-                        : "bg-[#5e6ad2]/10 text-[#7170ff]"
-                    }`}>
-                      {isLive && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#ef4444] mr-1.5 animate-live align-middle" />}
-                      {m.status}
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    <span className="text-[15px] font-semibold text-[#f7f8f8] tabular-nums">
+                      {p.stake_usdc} USDC
                     </span>
-
-                    <span className="text-[12px] text-[#62666d] w-20 text-right tabular-nums hidden sm:inline">
-                      {new Date(m.kickoff_utc).toLocaleDateString("en-US", {
-                        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                      })}
+                    <span className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${
+                      p.settled
+                        ? (p.payout_usdc ?? 0) > 0
+                          ? "bg-[#27a644]/10 text-[#27a644]"
+                          : "bg-[#ef4444]/10 text-[#ef4444]"
+                        : "bg-[#f59e0b]/10 text-[#f59e0b]"
+                    }`}>
+                      {p.settled
+                        ? (p.payout_usdc ?? 0) > 0
+                          ? `Won +${p.payout_usdc} USDC`
+                          : "Lost"
+                        : "Pending"}
                     </span>
                   </div>
                 </div>
               </Link>
-            );
-          })}
+            ))
+          )}
         </div>
+      )}
+
+      {/* Match list (non-mybets filters) */}
+      {filter !== "mybets" && (
+        <>
+          {filtered.length === 0 ? (
+            <div className="rounded-xl border border-[#23252a] bg-[#16181a] p-8 text-center">
+              <p className="text-[#8a8f98] text-sm">No {filter} matches</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((m, i) => {
+                const homeFlag = flagUrl(COUNTRY_FLAGS[m.home_team] || "");
+                const awayFlag = flagUrl(COUNTRY_FLAGS[m.away_team] || "");
+                const isLive = m.status === "live";
+                const isUpcoming = m.status === "scheduled";
+                const countdownText = countdown(m.kickoff_utc);
+
+                return (
+                  <Link
+                    key={m.match_id}
+                    to={`/matches/${m.match_id}`}
+                    className={`block rounded-xl border transition-all duration-200 animate-fade-in-up hover:border-[#34343a] cursor-pointer ${
+                      isLive
+                        ? "border-[#ef4444]/20 bg-[#0f1011] hover:bg-[#141518]"
+                        : "border-[#23252a] bg-[#0f1011] hover:bg-[#141518]"
+                    }`}
+                    style={{ animationDelay: `${i * 40}ms` }}
+                  >
+                    <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                        <span className="text-[15px] font-medium text-[#f7f8f8] truncate flex items-center gap-1.5">
+                          {homeFlag && <img src={homeFlag} alt="" className="w-5 h-3.5 rounded-sm opacity-80 flex-shrink-0" />}
+                          <span className="truncate">{m.home_team}</span>
+                        </span>
+                        <span className="text-[#62666d] text-[13px] font-medium flex-shrink-0">vs</span>
+                        <span className="text-[15px] font-medium text-[#f7f8f8] truncate flex items-center gap-1.5">
+                          <span className="truncate">{m.away_team}</span>
+                          {awayFlag && <img src={awayFlag} alt="" className="w-5 h-3.5 rounded-sm opacity-80 flex-shrink-0" />}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+                        {m.home_score !== null && m.away_score !== null ? (
+                          <span className="text-lg font-semibold text-[#f7f8f8] tabular-nums">
+                            {m.home_score} <span className="text-[#8a8f98]">—</span> {m.away_score}
+                          </span>
+                        ) : isUpcoming ? (
+                          <span className="text-[13px] font-medium text-[#7170ff] tabular-nums animate-pulse">
+                            ⏳ {countdownText}
+                          </span>
+                        ) : null}
+                        <span className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${
+                          isLive ? "bg-[#ef4444]/10 text-[#ef4444]"
+                            : m.status === "finished" ? "bg-[#62666d]/10 text-[#62666d]"
+                            : "bg-[#5e6ad2]/10 text-[#7170ff]"
+                        }`}>
+                          {isLive && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#ef4444] mr-1.5 animate-live align-middle" />}
+                          {m.status}
+                        </span>
+                        <span className="text-[12px] text-[#62666d] w-20 text-right tabular-nums hidden sm:inline">
+                          {new Date(m.kickoff_utc).toLocaleDateString("en-US", {
+                            month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
