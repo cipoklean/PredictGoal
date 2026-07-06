@@ -1,4 +1,4 @@
-"""Wallet API endpoints — CCTP deposit/withdraw for USDC on testnet."""
+"""Wallet API endpoints — CCTP deposit/withdraw and balance for testnet USDC."""
 
 import logging
 
@@ -9,6 +9,14 @@ from app.services.cctp import deposit_usdc, withdraw_usdc, CCTPTransferResult
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/wallet", tags=["wallet"])
+
+# In-memory balance store (testnet only — lost on restart)
+_user_balances: dict[str, float] = {}
+
+
+def _get_balance(user_address: str) -> float:
+    """Get simulated testnet balance for a user."""
+    return _user_balances.get(user_address, 100.0)  # Default: 100 USDC testnet
 
 
 class DepositRequest(BaseModel):
@@ -59,7 +67,11 @@ async def deposit(request: Request, body: DepositRequest):
             detail=result.error or "CCTP deposit failed",
         )
 
-    logger.info("Deposit successful: user=%s, amount=%s USDC", user_address, body.amount_usdc)
+    # Update simulated balance
+    _user_balances[user_address] = _get_balance(user_address) + body.amount_usdc
+
+    logger.info("Deposit successful: user=%s, amount=%s USDC, new_balance=%s",
+                user_address, body.amount_usdc, _user_balances[user_address])
     return TransferResponse(
         success=True,
         tx_hash=result.tx_hash,
@@ -94,9 +106,35 @@ async def withdraw(request: Request, body: WithdrawRequest):
             detail=result.error or "CCTP withdraw failed",
         )
 
-    logger.info("Withdraw successful: user=%s, amount=%s USDC", user_address, body.amount_usdc)
+    # Deduct from simulated balance
+    current = _get_balance(user_address)
+    if current < body.amount_usdc:
+        raise HTTPException(status_code=400, detail="Insufficient testnet balance")
+    _user_balances[user_address] = current - body.amount_usdc
+
+    logger.info("Withdraw successful: user=%s, amount=%s USDC, new_balance=%s",
+                user_address, body.amount_usdc, _user_balances[user_address])
     return TransferResponse(
         success=True,
         tx_hash=result.tx_hash,
         amount_usdc=body.amount_usdc,
+    )
+
+
+# ── Balance ──────────────────────────────────────────────
+
+class BalanceResponse(BaseModel):
+    user_address: str
+    balance_usdc: float
+
+
+@router.get("/balance", response_model=BalanceResponse)
+async def get_balance(request: Request):
+    """Get the testnet USDC balance for the connected wallet."""
+    user_address = (request.headers.get("X-User-Address") or "").strip()
+    if not user_address:
+        raise HTTPException(status_code=401, detail="X-User-Address header required")
+    return BalanceResponse(
+        user_address=user_address,
+        balance_usdc=_get_balance(user_address),
     )

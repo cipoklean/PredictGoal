@@ -1,10 +1,16 @@
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
+let _walletAddress = "";
+
+export function setWalletAddress(addr: string) {
+  _walletAddress = addr;
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
     headers: {
       "Content-Type": "application/json",
-      "X-User-Address": "inj1testuser0000000000000000000000",
+      "X-User-Address": _walletAddress || "inj1testuser0000000000000000000000",
       ...options?.headers,
     },
     ...options,
@@ -88,4 +94,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ amount_usdc }),
     }),
+
+  getBalance: () =>
+    request<{ user_address: string; balance_usdc: number }>("/wallet/balance"),
 };

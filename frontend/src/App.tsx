@@ -1,11 +1,25 @@
+import { useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import ConnectWallet from "./components/ConnectWallet";
+import { setWalletAddress as updateApiWallet } from "./api";
 import MatchesPage from "./pages/Matches";
 import MatchDetailPage from "./pages/MatchDetail";
 import LeaderboardPage from "./pages/Leaderboard";
 import WalletPage from "./pages/Wallet";
 
-function Navbar() {
+const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+
+function Navbar({
+  walletAddress,
+  onConnect,
+  onDisconnect,
+  balance,
+}: {
+  walletAddress: string;
+  onConnect: (addr: string) => void;
+  onDisconnect: () => void;
+  balance: number | null;
+}) {
   const location = useLocation();
 
   const links = [
@@ -15,11 +29,18 @@ function Navbar() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-[#1e1e22]"
-      style={{ background: "rgba(8,9,10,0.82)", backdropFilter: "blur(20px)" }}>
+    <nav
+      className="sticky top-0 z-50 border-b border-[#1e1e22]"
+      style={{ background: "rgba(8,9,10,0.82)", backdropFilter: "blur(20px)" }}
+    >
       <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-14">
-        <Link to="/" className="flex items-center gap-2.5 text-[#f7f8f8] font-semibold text-[15px] tracking-tight hover:opacity-90 transition">
-          <span className="w-7 h-7 rounded-lg bg-[#5e6ad2] flex items-center justify-center text-white text-xs font-bold">P</span>
+        <Link
+          to="/"
+          className="flex items-center gap-2.5 text-[#f7f8f8] font-semibold text-[15px] tracking-tight hover:opacity-90 transition"
+        >
+          <span className="w-7 h-7 rounded-lg bg-[#5e6ad2] flex items-center justify-center text-white text-xs font-bold">
+            P
+          </span>
           PredictGoal
         </Link>
         <div className="flex items-center gap-1">
@@ -36,8 +57,17 @@ function Navbar() {
               {link.label}
             </Link>
           ))}
+          {walletAddress && balance !== null && (
+            <span className="text-[12px] font-medium text-[#27a644] mr-1 font-mono tabular-nums">
+              {balance.toFixed(1)} USDC
+            </span>
+          )}
           <div className="ml-3">
-            <ConnectWallet />
+            <ConnectWallet
+              address={walletAddress}
+              onConnect={onConnect}
+              onDisconnect={onDisconnect}
+            />
           </div>
         </div>
       </div>
@@ -46,10 +76,43 @@ function Navbar() {
 }
 
 export default function App() {
+  const [walletAddress, setWalletAddress] = useState("");
+  const [balance, setBalance] = useState<number | null>(null);
+
+  const fetchBalance = useCallback(async (addr: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/wallet/balance`, {
+        headers: { "X-User-Address": addr },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBalance(data.balance_usdc);
+      }
+    } catch {
+      setBalance(null);
+    }
+  }, []);
+
+  const handleConnect = (addr: string) => {
+    setWalletAddress(addr);
+    updateApiWallet(addr); // so all API calls send the connected address
+    fetchBalance(addr);
+  };
+
+  const handleDisconnect = () => {
+    setWalletAddress("");
+    setBalance(null);
+  };
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-[#08090a] text-[#d0d6e0]">
-        <Navbar />
+        <Navbar
+          walletAddress={walletAddress}
+          onConnect={handleConnect}
+          onDisconnect={handleDisconnect}
+          balance={balance}
+        />
         <main className="py-8">
           <Routes>
             <Route path="/" element={<MatchesPage />} />
