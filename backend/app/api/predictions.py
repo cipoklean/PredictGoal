@@ -1,16 +1,16 @@
 """Prediction API endpoints — place predictions, view history, settle markets."""
 
 import asyncio
-import json
 import logging
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request, status
 
+from app import store
 from app.schemas.match import PredictionCreate, PredictionResponse, LeaderboardEntry
 from app.services.worldcup import fetch_upcoming_matches
-from app.services.balance import get_balance, debit as debit_balance
+from app.services.balance import credit as credit_balance, debit as debit_balance
 from app.services import x402 as x402_service
 from app.core.config import get_settings
 
@@ -18,16 +18,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/predictions", tags=["predictions"])
 settings = get_settings()
 
-# In-memory prediction store (replace with DB in production)
-_predictions: dict[str, dict] = {}
-_predictions_lock = asyncio.Lock()
-
 # Per-user locks to prevent race conditions on concurrent bets
 _user_locks: dict[str, asyncio.Lock] = {}
 _user_locks_guard = asyncio.Lock()
 
-# Settled matches (idempotency)
-_settled_matches: set[str] = set()
+# Per-match settlement locks (reentrancy guard)
 _settlement_locks: dict[str, asyncio.Lock] = {}
 _settlement_locks_guard = asyncio.Lock()
 
@@ -53,7 +48,6 @@ async def _validate_match_for_prediction(match_id: str) -> dict:
             detail=f"Match '{match_id}' not found",
         )
 
-    # Enforce kickoff cutoff server-side
     match_status = match.get("status", "scheduled")
     if match_status in ("finished", "cancelled"):
         raise HTTPException(
@@ -61,7 +55,6 @@ async def _validate_match_for_prediction(match_id: str) -> dict:
             detail=f"Match '{match_id}' is {match_status} — predictions are closed",
         )
 
-    # For live matches: block predictions (odds change too fast, unfair)
     if match_status == "live":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -81,7 +74,7 @@ async def _validate_match_for_prediction(match_id: str) -> dict:
                     detail=f"Match '{match_id}' has already kicked off — predictions are closed",
                 )
         except (ValueError, TypeError):
-            pass  # If we can't parse the date, fall through to accepting
+            pass
 
     return match
 
@@ -90,8 +83,6 @@ def _get_user_address(request: Request) -> str:
     """Extract user address from request headers with validation."""
     addr = (request.headers.get("X-User-Address") or "").strip()
     if not addr:
-        # In production: require signed message + nonce verification
-        # For testnet/demo: accept the header but validate format
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="X-User-Address header is required",
@@ -105,6 +96,7 @@ def _get_user_address(request: Request) -> str:
 
 
 # ── POST /api/predictions ───────────────────────────────────
+
 
 @router.post("", response_model=PredictionResponse, status_code=status.HTTP_201_CREATED)
 async def place_prediction(request: Request, body: PredictionCreate):
@@ -124,20 +116,16 @@ async def place_prediction(request: Request, body: PredictionCreate):
     if payment_header is None:
         logger.warning("x402 payment missing for user=%s — allowing in dev mode", user_address)
 
-    # Validate stake bounds (Pydantic already does this, but double-check)
+    # Validate stake bounds
     if body.stake_usdc <= 0:
         raise HTTPException(status_code=400, detail="Stake must be greater than 0")
     if body.stake_usdc > 100:
         raise HTTPException(status_code=400, detail="Maximum stake is 100 USDC")
 
-    # All outcomes (home/draw/away) are valid for all matches — including knockout.
-    # Bets settle on the 90-minute result, not extra time or penalties.
-    # This matches how real sportsbooks handle World Cup knockout matches.
-
     # Atomic per-user prediction placement (prevents race conditions)
     user_lock = await _get_user_lock(user_address)
     async with user_lock:
-        # Deduct from balance (thread-safe, raises if insufficient)
+        # Deduct from balance (persisted via store)
         try:
             debit_balance(user_address, body.stake_usdc)
         except ValueError as e:
@@ -148,7 +136,7 @@ async def place_prediction(request: Request, body: PredictionCreate):
         tx_hash = f"x402_tx_{prediction_id.hex[:12]}"
 
         record = {
-            "prediction_id": prediction_id,
+            "prediction_id": str(prediction_id),
             "user_address": user_address,
             "match_id": body.match_id,
             "outcome": body.outcome.value,
@@ -158,7 +146,7 @@ async def place_prediction(request: Request, body: PredictionCreate):
             "settled": False,
             "payout_usdc": None,
         }
-        _predictions[str(prediction_id)] = record
+        store.add_prediction(str(prediction_id), record)
 
     logger.info(
         "Prediction placed: id=%s, user=%s, match=%s, outcome=%s, stake=%s USDC",
@@ -170,17 +158,18 @@ async def place_prediction(request: Request, body: PredictionCreate):
 
 # ── GET /api/predictions/me ──────────────────────────────────
 
+
 @router.get("/me", response_model=list[PredictionResponse])
 async def get_my_predictions(request: Request):
     """Get all predictions for the authenticated user."""
     user_address = _get_user_address(request)
 
-    async with _predictions_lock:
-        user_predictions = [
-            PredictionResponse(**p)
-            for p in _predictions.values()
-            if p["user_address"] == user_address
-        ]
+    all_preds = store.get_predictions()
+    user_predictions = [
+        PredictionResponse(**p)
+        for p in all_preds.values()
+        if p["user_address"] == user_address
+    ]
 
     # Sort by most recent first
     user_predictions.sort(key=lambda p: p.placed_at, reverse=True)
@@ -189,11 +178,11 @@ async def get_my_predictions(request: Request):
 
 # ── GET /api/predictions/leaderboard ────────────────────────
 
+
 @router.get("/leaderboard", response_model=list[LeaderboardEntry])
 async def get_leaderboard():
     """Get global prediction leaderboard — includes all predictions (testnet)."""
-    async with _predictions_lock:
-        all_preds = list(_predictions.values())
+    all_preds = list(store.get_predictions().values())
 
     # Include ALL predictions (not just settled) since testnet has no auto-settlement
     user_stats: dict[str, dict] = {}
@@ -239,6 +228,7 @@ async def get_leaderboard():
 
 # ── POST /api/predictions/settle ────────────────────────────
 
+
 @router.post("/settle")
 async def settle_market(request: Request):
     """
@@ -262,14 +252,20 @@ async def settle_market(request: Request):
         raise HTTPException(status_code=400, detail="match_id is required")
 
     # ── AUTH GUARD ──
-    if ADMIN_SETTLE_KEY and admin_key != ADMIN_SETTLE_KEY:
+    if not ADMIN_SETTLE_KEY:
+        logger.error("ADMIN_SETTLE_KEY is not configured — settlement rejected")
+        raise HTTPException(
+            status_code=401,
+            detail="Settlement is not configured on this server (no admin key set)",
+        )
+    if admin_key != ADMIN_SETTLE_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized: invalid admin key")
 
     if home_score is None or away_score is None:
         raise HTTPException(status_code=400, detail="home_score and away_score are required")
 
     # ── IDEMPOTENCY GUARD ──
-    if match_id in _settled_matches:
+    if store.is_match_settled(match_id):
         return {
             "status": "already_settled",
             "match_id": match_id,
@@ -283,7 +279,7 @@ async def settle_market(request: Request):
 
     async with _settlement_locks[match_id]:
         # Double-check after acquiring lock
-        if match_id in _settled_matches:
+        if store.is_match_settled(match_id):
             return {
                 "status": "already_settled",
                 "match_id": match_id,
@@ -298,18 +294,30 @@ async def settle_market(request: Request):
         else:
             actual_outcome = "draw"
 
-        # Mark all predictions for this match as settled
-        async with _predictions_lock:
-            winners = []
-            for pid, p in _predictions.items():
-                if p["match_id"] == match_id:
-                    p["settled"] = True
-                    if p["outcome"] == actual_outcome:
-                        # Simple payout: stake * 2 (simplified; real would use pool)
-                        p["payout_usdc"] = p["stake_usdc"] * 2
-                        winners.append(pid)
+        # Settle all predictions for this match
+        all_preds = store.get_predictions()
+        winners = []
+        for pid, p in all_preds.items():
+            if p["match_id"] == match_id:
+                p["settled"] = True
+                if p["outcome"] == actual_outcome:
+                    p["payout_usdc"] = p["stake_usdc"] * 2
+                    winners.append(pid)
+                    # Credit winner's balance with their payout
+                    try:
+                        credit_balance(p["user_address"], p["payout_usdc"])
+                        logger.info(
+                            "Settlement credit: user=%s, payout=%s USDC, pred=%s",
+                            p["user_address"][:12], p["payout_usdc"], pid[:8],
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Failed to credit winner %s for pred %s",
+                            p["user_address"][:12], pid,
+                        )
+                store.update_prediction(pid, p)
 
-        _settled_matches.add(match_id)
+        store.mark_settled(match_id, winners)
 
         logger.info(
             "Market settled: match=%s, score=%d-%d, outcome=%s, winners=%d",

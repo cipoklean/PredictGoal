@@ -1,11 +1,17 @@
 """Tests for the MCP server tools."""
 
 import json
+import os
 import sys
 import pytest
 
+# Must set ADMIN_SETTLE_KEY before importing server (module-level read)
+os.environ["ADMIN_SETTLE_KEY"] = "test-key"
+
 sys.path.insert(0, ".")
-from server import get_match_data, calculate_odds, settle_market, ADMIN_API_KEY
+from server import get_match_data, calculate_odds, settle_market
+
+ADMIN_API_KEY = "test-key"
 
 
 class MockCtx:

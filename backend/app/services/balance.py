@@ -1,31 +1,22 @@
-"""Shared in-memory balance store for testnet demo."""
+"""Balance service — thin wrapper over the persistent store.
 
-from threading import Lock
+Existing callers (wallet API, predictions API) import get_balance / credit / debit
+from here — these functions now persist to disk via app.store.
+"""
 
-_balances: dict[str, float] = {}
-_lock = Lock()
+from app import store
 
 
 def get_balance(user_address: str) -> float:
     """Get a user's testnet balance. Defaults to 100 USDC for new users."""
-    return _balances.get(user_address, 100.0)
+    return store.get_balance(user_address)
 
 
 def credit(user_address: str, amount_usdc: float) -> float:
     """Add to balance. Returns new balance."""
-    with _lock:
-        current = _balances.get(user_address, 100.0)
-        _balances[user_address] = current + amount_usdc
-        return _balances[user_address]
+    return store.credit_balance(user_address, amount_usdc)
 
 
 def debit(user_address: str, amount_usdc: float) -> float:
     """Deduct from balance. Raises ValueError if insufficient. Returns new balance."""
-    with _lock:
-        current = _balances.get(user_address, 100.0)
-        if current < amount_usdc:
-            raise ValueError(
-                f"Insufficient balance. You have {current:.1f} USDC, need {amount_usdc:.1f} USDC."
-            )
-        _balances[user_address] = current - amount_usdc
-        return _balances[user_address]
+    return store.debit_balance(user_address, amount_usdc)

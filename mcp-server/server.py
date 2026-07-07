@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 from datetime import datetime, timezone as tz
 
 from mcp.server.fastmcp import FastMCP, Context
@@ -29,8 +30,10 @@ _settlement_locks_guard = asyncio.Lock()
 # Track which matches have been settled (idempotency)
 _settled_matches: set[str] = set()
 
-# Admin key (from env — never hardcode in prod)
-ADMIN_API_KEY = "admin-key-change-me"
+# Admin key — from env var, never hardcoded
+ADMIN_API_KEY = os.getenv("ADMIN_SETTLE_KEY", "")
+if not ADMIN_API_KEY:
+    logger.warning("ADMIN_SETTLE_KEY not set — MCP settlement will be disabled")
 
 
 # ── Placeholder match data ─────────────────────────────

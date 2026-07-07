@@ -10,6 +10,7 @@ from app.api.matches import router as matches_router
 from app.api.predictions import router as predictions_router
 from app.api.wallet import router as wallet_router
 from app.api.insights import router as insights_router
+from app import store
 from app.core.config import get_settings
 from app.services import x402 as x402_service
 
@@ -20,6 +21,9 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Initialize persistent store (balances + predictions survive restarts)
+store.init()
 
 # Rate limiting (optional — graceful fallback if slowapi not installed)
 try:

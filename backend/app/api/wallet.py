@@ -36,7 +36,7 @@ class TransferResponse(BaseModel):
 @router.post("/deposit", response_model=TransferResponse, status_code=status.HTTP_200_OK)
 async def deposit(request: Request, body: DepositRequest):
     """Deposit USDC from source chain to Injective testnet via CCTP. Testnet only."""
-    user_address = request.headers.get("X-User-Address", "inj1testuser0000000000000000000000")
+    user_address = (request.headers.get("X-User-Address") or "").strip()
     if not user_address:
         raise HTTPException(status_code=401, detail="X-User-Address header required")
 
@@ -54,7 +54,7 @@ async def deposit(request: Request, body: DepositRequest):
 @router.post("/withdraw", response_model=TransferResponse, status_code=status.HTTP_200_OK)
 async def withdraw(request: Request, body: WithdrawRequest):
     """Withdraw USDC from Injective testnet back to source chain via CCTP. Testnet only."""
-    user_address = request.headers.get("X-User-Address", "inj1testuser0000000000000000000000")
+    user_address = (request.headers.get("X-User-Address") or "").strip()
     if not user_address:
         raise HTTPException(status_code=401, detail="X-User-Address header required")
 

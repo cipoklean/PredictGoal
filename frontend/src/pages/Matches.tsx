@@ -53,12 +53,16 @@ export default function MatchesPage() {
   }, []);
 
   useEffect(() => {
-    Promise.all([
-      api.getMatches().then((res) => setMatches(res.matches)),
-      api.getMyPredictions().then(setPredictions),
-    ])
-      .catch((e) => setError(e.message))
+    // Fetch matches independently — don't let auth errors block the page
+    api.getMatches()
+      .then((res) => setMatches(res.matches))
+      .catch(() => {})  // matches fail silently (fallback to empty)
       .finally(() => setLoading(false));
+
+    // My predictions — silently ignore if not authenticated
+    api.getMyPredictions()
+      .then(setPredictions)
+      .catch(() => setPredictions([]));
   }, []);
 
   const filtered = matches.filter((m) => {

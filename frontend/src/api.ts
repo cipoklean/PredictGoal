@@ -10,7 +10,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
     headers: {
       "Content-Type": "application/json",
-      "X-User-Address": _walletAddress || "inj1testuser0000000000000000000000",
+      "X-User-Address": _walletAddress || "",
       ...options?.headers,
     },
     ...options,

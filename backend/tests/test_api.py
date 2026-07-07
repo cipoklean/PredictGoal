@@ -1,7 +1,11 @@
 """Integration tests for the PredictGoal backend API."""
 
+import os
 import pytest
 from httpx import ASGITransport, AsyncClient
+
+# Ensure admin settle key is set for tests (before app import loads config)
+os.environ.setdefault("ADMIN_SETTLE_KEY", "test-key")
 
 from app.main import app
 from app.core.config import get_settings
@@ -10,7 +14,7 @@ settings = get_settings()
 
 # Default test headers
 PRED_HEADERS = {"X-User-Address": "inj1testuser0000000000000000000000"}
-SETTLE_HEADERS = {"X-Admin-Key": settings.ADMIN_SETTLE_KEY or "test-key"}
+SETTLE_HEADERS = {"X-Admin-Key": settings.ADMIN_SETTLE_KEY}
 
 
 @pytest.fixture
@@ -245,7 +249,7 @@ async def test_settle_idempotent(client):
 
 @pytest.mark.asyncio
 async def test_deposit(client):
-    response = await client.post("/api/wallet/deposit", json={"amount_usdc": 100.0})
+    response = await client.post("/api/wallet/deposit", json={"amount_usdc": 100.0}, headers=PRED_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
@@ -255,7 +259,7 @@ async def test_deposit(client):
 
 @pytest.mark.asyncio
 async def test_withdraw(client):
-    response = await client.post("/api/wallet/withdraw", json={"amount_usdc": 50.0})
+    response = await client.post("/api/wallet/withdraw", json={"amount_usdc": 50.0}, headers=PRED_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
