@@ -44,9 +44,9 @@ export default function ConnectWallet({ address, onConnect, onDisconnect }: Prop
           <span className="relative inline-flex h-2 w-2 rounded-full bg-[#15be53]" />
         </span>
       )}
-      <span className="font-mono text-xs truncate max-w-[120px]">{address || "Connect Wallet"}</span>
+      <span className="font-mono text-xs truncate max-w-[120px]">{address || "Set Address"}</span>
       {address && (
-        <span className="bg-[rgba(83,58,253,0.2)] text-[#c4bbff] text-[9px] font-bold uppercase px-2 py-0.5 rounded-lg">Demo</span>
+        <span className="bg-[rgba(83,58,253,0.2)] text-[#c4bbff] text-[9px] font-bold uppercase px-2 py-0.5 rounded-lg">Active</span>
       )}
     </button>
   );

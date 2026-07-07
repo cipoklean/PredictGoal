@@ -111,7 +111,7 @@ export default function App() {
             <Route path="/" element={<MatchesPage />} />
             <Route path="/matches/:id" element={<MatchDetailPage />} />
             <Route path="/leaderboard" element={<LeaderboardPage />} />
-            <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/wallet" element={<WalletPage walletAddress={walletAddress} />} />
           </Routes>
         </main>
         <footer className="text-center text-[#4d5063] text-xs py-8 border-t border-[rgba(83,58,253,0.08)]">

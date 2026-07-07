@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { api } from "../api";
 
-export default function WalletPage() {
+interface Props {
+  walletAddress: string;
+}
+
+export default function WalletPage({ walletAddress }: Props) {
   const [amount, setAmount] = useState(10);
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState<"success" | "error">("success");
@@ -19,6 +23,8 @@ export default function WalletPage() {
     } finally { setLoading(false); }
   };
 
+  const noAddress = !walletAddress;
+
   return (
     <div className="max-w-lg mx-auto px-4 sm:px-6 animate-fade-in-up space-y-5">
       <div>
@@ -26,17 +32,21 @@ export default function WalletPage() {
         <p className="text-sm text-[#7b7f92] mt-1">Manage your testnet USDC for predictions</p>
       </div>
 
-      {/* Connected address */}
+      {/* Active address */}
       <div className="rounded-2xl border border-[rgba(83,58,253,0.1)] bg-[#11131f] p-5">
-        <div className="text-xs font-bold text-[#7b7f92] uppercase tracking-widest mb-2">Connected Address</div>
+        <div className="text-xs font-bold text-[#7b7f92] uppercase tracking-widest mb-2">Active Address</div>
         <div className="flex items-center gap-2.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#15be53] animate-[breathe_2s_infinite] shadow-[0_0_8px_rgba(21,190,83,0.5)]" />
-          <span className="text-sm font-semibold text-[#e8eaf0] font-mono">inj1testuser...0000</span>
+          <span className={`w-2.5 h-2.5 rounded-full shadow-[0_0_8px_rgba(21,190,83,0.5)] ${
+            noAddress ? "bg-[#4d5063]" : "bg-[#15be53] animate-[breathe_2s_infinite]"
+          }`} />
+          <span className="text-sm font-semibold text-[#e8eaf0] font-mono">
+            {walletAddress || "No address set — use the Set Address button in the navbar"}
+          </span>
         </div>
       </div>
 
-      {/* Transfer */}
-      <div className="rounded-2xl border border-[rgba(83,58,253,0.1)] bg-[#11131f] p-5 sm:p-6">
+      {/* Transfer — disabled if no address */}
+      <div className={`rounded-2xl border border-[rgba(83,58,253,0.1)] bg-[#11131f] p-5 sm:p-6 ${noAddress ? "opacity-50" : ""}`}>
         <h2 className="text-xs font-bold text-[#7b7f92] uppercase tracking-widest mb-5">CCTP Transfer</h2>
 
         <div className="mb-4">
@@ -45,19 +55,20 @@ export default function WalletPage() {
             <input
               type="number" min={0.1} step={1}
               value={amount} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-              className="w-full rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(83,58,253,0.12)] px-4 py-3 text-sm font-semibold text-[#e8eaf0] outline-none focus:border-[#533afd] focus:ring-2 focus:ring-[#533afd]/20 transition-all duration-200"
+              disabled={noAddress}
+              className="w-full rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(83,58,253,0.12)] px-4 py-3 text-sm font-semibold text-[#e8eaf0] outline-none focus:border-[#533afd] focus:ring-2 focus:ring-[#533afd]/20 transition-all duration-200 disabled:opacity-40"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#4d5063]">USDC</span>
           </div>
         </div>
 
         <div className="flex gap-2">
-          <button onClick={() => doAction("deposit")} disabled={loading || amount <= 0}
+          <button onClick={() => doAction("deposit")} disabled={loading || amount <= 0 || noAddress}
             className="flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-[0.97]
               bg-gradient-to-br from-[#15be53] to-[#0dd85f] hover:from-[#16c958] hover:to-[#0ee865] disabled:from-[#1e2140] disabled:to-[#1e2140] disabled:text-[#4d5063] text-white shadow-[0_0_16px_rgba(21,190,83,0.2)]">
             Deposit
           </button>
-          <button onClick={() => doAction("withdraw")} disabled={loading || amount <= 0}
+          <button onClick={() => doAction("withdraw")} disabled={loading || amount <= 0 || noAddress}
             className="flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-[0.97]
               bg-[rgba(255,255,255,0.04)] border border-[rgba(83,58,253,0.15)] text-[#e8eaf0] hover:bg-[rgba(255,255,255,0.08)] disabled:opacity-40 disabled:cursor-not-allowed">
             Withdraw
