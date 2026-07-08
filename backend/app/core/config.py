@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:5173"]
 
+    # Monitoring
+    HEALTH_CHECK_ENABLED: bool = True  # set to false to disable /health for production
+
 
 @lru_cache
 def get_settings() -> Settings:

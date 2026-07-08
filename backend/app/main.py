@@ -78,7 +78,13 @@ app.include_router(insights_router)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for monitoring."""
+    """Health check endpoint for uptime monitoring (UptimeRobot, etc.).
+    
+    Disable by setting HEALTH_CHECK_ENABLED=false in .env — 
+    no code changes needed to remove this endpoint."""
+    if not settings.HEALTH_CHECK_ENABLED:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not found")
     return {
         "status": "ok",
         "app": settings.APP_NAME,
