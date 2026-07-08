@@ -18,7 +18,7 @@ X402_FACILITATOR_URL = "https://x402.org/facilitator"
 
 # Endpoint pricing (USDC)
 X402_PRICING: dict[str, float] = {
-    "/api/predictions": 0.1,
+    "/api/predictions": 2.0,
     "/api/insights": 0.5,
     "/api/wallet/withdraw": 0.5,
 }
@@ -41,7 +41,7 @@ def is_x402_available() -> bool:
     """Check if x402 SDK is installed and configured."""
     try:
         from x402 import x402ResourceServer
-        from x402.http import HTTPFacilitatorClient
+        from x402.http import HTTPFacilitatorClient, FacilitatorConfig
         from x402.mechanisms.evm.exact import ExactEvmServerScheme
         return True
     except ImportError:
@@ -67,10 +67,11 @@ def get_x402_server():
 
     try:
         from x402 import x402ResourceServer, ResourceConfig
-        from x402.http import HTTPFacilitatorClient
+        from x402.http import HTTPFacilitatorClient, FacilitatorConfig
         from x402.mechanisms.evm.exact import ExactEvmServerScheme
 
-        facilitator = HTTPFacilitatorClient(url=X402_FACILITATOR_URL)
+        facilitator_config = FacilitatorConfig(url=X402_FACILITATOR_URL)
+        facilitator = HTTPFacilitatorClient(facilitator_config)
         server = x402ResourceServer(facilitator)
         server.register(X402_NETWORK, ExactEvmServerScheme())
         server.initialize()
