@@ -13,6 +13,17 @@ import logging
 import math
 import os
 from datetime import datetime, timezone as tz
+from pathlib import Path
+
+# Load .env from backend/.env for shared config (e.g. ADMIN_SETTLE_KEY)
+# Must run before any module-level env reads, and before logging is configured
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parent.parent / "backend" / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path)
+except ImportError:
+    pass  # python-dotenv not installed — rely on actual env vars
 
 from mcp.server.fastmcp import FastMCP, Context
 
