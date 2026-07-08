@@ -56,7 +56,7 @@ export default function MatchesPage() {
     // Fetch matches independently — don't let auth errors block the page
     api.getMatches()
       .then((res) => setMatches(res.matches))
-      .catch(() => {})  // matches fail silently (fallback to empty)
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
 
     // My predictions — silently ignore if not authenticated
