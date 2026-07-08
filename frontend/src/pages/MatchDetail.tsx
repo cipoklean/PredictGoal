@@ -204,21 +204,37 @@ export default function MatchDetailPage() {
           <div className="flex gap-2">
             <div className="flex-1 relative">
               <input
-                type="text" inputMode="decimal" minLength={1}
+                type="text" inputMode="decimal"
+                placeholder="0"
                 value={stake}
-                onChange={(e) => setStake(e.target.value || "0")}
-                className="w-full rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(83,58,253,0.12)] px-4 py-3 text-sm font-semibold text-[#e8eaf0] outline-none focus:border-[#533afd] focus:ring-2 focus:ring-[#533afd]/20 transition-all duration-200"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  // Allow empty, digits, and single decimal point
+                  if (v === "" || /^\d*\.?\d*$/.test(v)) setStake(v);
+                }}
+                className="w-full rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(83,58,253,0.12)] px-4 py-3 text-sm font-semibold text-[#e8eaf0] outline-none focus:border-[#533afd] focus:ring-2 focus:ring-[#533afd]/20 transition-all duration-200 placeholder:text-[#4d5063]"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#4d5063]">USDC</span>
             </div>
             <button
               onClick={placePrediction}
-              disabled={submitting || parseFloat(stake) <= 0}
+              disabled={submitting || isNaN(parseFloat(stake)) || parseFloat(stake) <= 0}
               className="bg-gradient-to-br from-[#533afd] to-[#7b6ff0] hover:from-[#4434d4] hover:to-[#6b5fe0] disabled:from-[#1e2140] disabled:to-[#1e2140] disabled:text-[#4d5063] text-white text-sm font-bold px-6 rounded-xl transition-all duration-200 active:scale-[0.97] shadow-[0_0_20px_rgba(83,58,253,0.25)] hover:shadow-[0_0_28px_rgba(83,58,253,0.4)]"
             >
               {submitting ? "Placing..." : "Predict"}
             </button>
           </div>
+
+          {/* Potential payout */}
+          {analytics && !isNaN(parseFloat(stake)) && parseFloat(stake) > 0 && (
+            <div className="mt-4 rounded-xl bg-[rgba(21,190,83,0.05)] border border-[rgba(21,190,83,0.12)] px-4 py-3 flex items-center justify-between">
+              <span className="text-xs font-bold text-[#7b7f92] uppercase tracking-widest">Potential Win</span>
+              <span className="text-sm font-bold text-[#15be53] font-mono tabular-nums">
+                +{parseFloat(stake).toFixed(1)} USDC
+                <span className="text-[10px] text-[#7b7f92] ml-1.5 font-normal">(2x payout on correct prediction)</span>
+              </span>
+            </div>
+          )}
 
           {msg && (
             <div className={`mt-4 text-xs font-semibold rounded-xl px-4 py-2.5 animate-fade-in-up ${
