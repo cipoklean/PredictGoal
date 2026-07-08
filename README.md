@@ -13,12 +13,12 @@ A non-custodial, micro-stakes prediction market for World Cup 2026 matches with 
 
 World Cup fans can:
 - Browse **104 live World Cup 2026 matches** with real data from football-data.org
-- View **AI-generated win probabilities** (Home/Draw/Away) via ELO + Poisson model
-- Place **micro-stake predictions** (0.1–100 USDC) via Injective x402 pay-per-use
+- View **AI-generated win probabilities** (Home/Draw/Away) via ELO + Poisson scoreline simulation
+- Place **micro-stake predictions** (1–100 USDC stake + 2 USDC x402 fee) via Injective x402 pay-per-use
 - Get **premium AI insights** — momentum, form analysis, key player impact (x402-gated)
-- Compete on a global **leaderboard** (settled predictions only)
+- Compete on a global **leaderboard** (all predictions tracked, ranked by total won)
 - Deposit and withdraw testnet USDC via **CCTP** cross-chain bridge (stubbed)
-- Markets are **auto-settled** post-match via backend API or MCP Server agent
+- Markets are **admin-settled** post-match via backend API or MCP Server agent
 - **Agent Skills package** (`predictgoal-odds`) — installable by Claude Code/Cursor/Gemini CLI
 
 ---
@@ -31,7 +31,7 @@ Every prediction (`POST /api/predictions`) and premium insight (`GET /api/insigh
 
 | Endpoint | Price | Status |
 |----------|-------|--------|
-| `POST /api/predictions` | 0.1 USDC | Dev mode (passthrough) |
+| `POST /api/predictions` | 2.0 USDC | Testnet-ready (x402.org facilitator, Base Sepolia) |
 | `GET /api/insights/{id}` | 0.5 USDC | Testnet-ready (x402 facilitator) |
 | `POST /api/wallet/withdraw` | 0.5 USDC | Stubbed |
 
@@ -81,15 +81,17 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Match data (104 matches) | **Live** | football-data.org API with 60s cache |
-| AI win probabilities | **Live** | ELO + Poisson model, deterministic |
-| Predictions (CRUD) | **Live** | In-memory store, locked at kickoff |
-| Leaderboard | **Live** | Server-computed, settled-only |
-| Settlement | **Live** | Admin-key gated, idempotent, reentrancy-safe |
+| AI win probabilities | **Live** | ELO + Poisson scoreline simulation, deterministic |
+| Predictions (CRUD) | **Live** | Persistent JSON store, locked at kickoff |
+| Leaderboard | **Live** | Server-computed, all predictions tracked |
+| Settlement | **Live** | Admin-key gated, idempotent, reentrancy-safe, credits winners |
+| x402 fee deduction | **Live** | 2 USDC deducted from balance per prediction |
 | Premium insights | **x402-gated** | Real verification via x402.org facilitator (Base Sepolia) |
-| x402 payment verification | **Testnet-ready** | Uses x402.org facilitator; falls back to dev mode if not configured |
 | CCTP deposit/withdraw | **Stubbed** | Returns success with mock tx hash; real testnet CCTP requires Injective-side Circle support |
 | MCP Server settlement | **Live** | Local stdio only, not connected to backend |
 | Agent Skills package | **Live** | Drop-in module, works standalone |
+| Persistent storage | **Live** | JSON file-backed store survives Render restarts |
+| Health check endpoint | **Live** | GET + HEAD at /health, toggle with HEALTH_CHECK_ENABLED |
 
 ---
 
@@ -104,9 +106,11 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 │ - Flags      │     │ - Cache 60s  │
 │ - Predict UI │     │ - Settlement │
 │ - Analytics  │     │ - Insights   │
-│ - Leaderboard│     └──────┬───────┘
-│ - Wallet     │            │
-└──────────────┘            ▼
+│ - Leaderboard│     │ - Store      │
+│ - Wallet     │     │   (balances  │
+└──────────────┘     │    + bets)   │
+                     └──────┬───────┘
+                            ▼
                     ┌──────────────┐
                     │  MCP Server  │
                     │  (Agent      │
@@ -123,15 +127,20 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 ## Security
 
 - **Per-user locking** — asyncio.Lock per address prevents concurrent stake races
+- **Balance locking** — thread-safe read-modify-write on all credit/debit operations
 - **Kickoff cutoff** — server-side enforcement (no post-kickoff/live predictions)
-- **Knockout draw blocked** — M49+ matches can only bet home/away
 - **Match ID validation** — checked against real match data, not trusted from request
-- **Settlement auth** — admin key required; idempotent + reentrancy-safe
+- **Settlement auth** — admin key **required** (rejects if not configured)
+- **Idempotent settlement** — calling twice returns "already_settled"
+- **Reentrancy-safe** — per-match asyncio.Lock prevents double-payouts
+- **Winning balances credited** — settlement auto-credits winners with 2x payout
 - **Input validation** — Pydantic with strict enums, `extra=forbid`
 - **No stack traces** — global exception handler
 - **Rate limiting** — slowapi (60 req/min default)
-- **CORS** — restricted to Vercel origin, not `*`
+- **CORS** — restricted to configured origins
 - **Secrets** — `.env` only, `.gitignore` enforced, `.env.example` with placeholders
+- **No default address** — all endpoints require explicit `X-User-Address` header
+- **MCP admin key** — loaded from `.env`, never hardcoded
 
 ---
 
@@ -146,6 +155,7 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 cd backend
 cp .env.example .env
 # Edit .env with your FOOTBALL_DATA_API_KEY (or leave blank for placeholder data)
+# Set ADMIN_SETTLE_KEY for settlement (required)
 uv sync
 uv run uvicorn app.main:app --reload --port 8000
 ```
@@ -170,6 +180,14 @@ Open http://localhost:5173
 ```bash
 # Copy to Claude Code or Cursor skills directory
 cp -r agent-skills/predictgoal-odds/ ~/.claude/skills/
+
+# Or run directly
+python agent-skills/predictgoal-odds/predictgoal_odds.py Spain Belgium
+```
+
+### Demo odds (quick CLI)
+```bash
+cd mcp-server && uv run python demo_odds.py Spain Belgium
 ```
 
 ### Run all tests
@@ -188,13 +206,13 @@ cd mcp-server && uv run pytest tests/ -v  # 6 tests
 | GET | `/api/matches/{id}` | Match detail | — | Free |
 | GET | `/api/matches/{id}/analytics` | Win probabilities | — | Free |
 | GET | `/api/insights/{id}` | Premium AI insight | x402 | 0.5 USDC |
-| POST | `/api/predictions` | Place prediction | Wallet addr | 0.1 USDC |
+| POST | `/api/predictions` | Place prediction | Wallet addr | 2.0 USDC |
 | GET | `/api/predictions/me` | My predictions | Wallet addr | Free |
-| GET | `/api/predictions/leaderboard` | Leaderboard (settled only) | — | Free |
+| GET | `/api/predictions/leaderboard` | Leaderboard (all predictions) | — | Free |
 | POST | `/api/predictions/settle` | Admin settlement | Admin key | Free |
 | POST | `/api/wallet/deposit` | CCTP deposit | Wallet addr | Free |
 | POST | `/api/wallet/withdraw` | CCTP withdraw | Wallet addr | 0.5 USDC |
-| GET | `/health` | Health check | — | Free |
+| GET | `/health` | Health check (GET + HEAD) | — | Free |
 
 ---
 
@@ -215,42 +233,30 @@ predictgoal/
 │   ├── requirements.txt
 │   ├── .env.example
 │   ├── app/
-│   │   ├── main.py              # FastAPI entry + rate limiting
+│   │   ├── main.py              # FastAPI entry + rate limiting + health
+│   │   ├── store.py             # Persistent JSON store (balances + predictions)
 │   │   ├── core/config.py       # Settings from env
 │   │   ├── api/                 # Routers (matches, predictions, wallet, insights)
-│   │   ├── services/            # Business logic (worldcup, analytics, x402, cctp)
+│   │   ├── services/            # Business logic (worldcup, analytics, x402, cctp, balance)
 │   │   └── schemas/             # Pydantic models
 │   └── tests/
 ├── mcp-server/
 │   ├── pyproject.toml
 │   ├── MCP_README.md            # Claude Desktop / Cursor setup
 │   ├── server.py                # MCP server with 3 tools
+│   ├── demo_odds.py             # Quick CLI demo: python demo_odds.py Spain Belgium
 │   └── tests/
 └── frontend/
     ├── package.json
     ├── vercel.json
     ├── vite.config.ts
     └── src/
-        ├── App.tsx              # Router + glass navbar + ConnectWallet
+        ├── App.tsx              # Router + navbar + wallet state
         ├── api.ts               # API client
         ├── components/
-        │   └── ConnectWallet.tsx
+        │   └── ConnectWallet.tsx # Set Address button
         └── pages/               # Matches, MatchDetail, Leaderboard, Wallet
 ```
-
----
-
-## Demo Video Script (Suggested)
-
-1. **Open PredictGoal** — show dark Linear-style UI, 104 matches with flags
-2. **Filter to upcoming** — pick a scheduled match, view AI probabilities
-3. **Place prediction** — select outcome, enter stake, click Predict → success
-4. **View leaderboard** — show ranking with settled predictions
-5. **Premium insight** — demonstrate `/api/insights/WC2026-M59` with momentum + form
-6. **Admin settlement** — call `/api/predictions/settle` with admin key → settled
-7. **Verify idempotency** — settle again → "already_settled"
-8. **MCP Server** — show Claude Desktop calling `calculate_odds`
-9. **Agent Skills** — show `python predictgoal_odds.py Argentina Brazil`
 
 ---
 
@@ -258,13 +264,15 @@ predictgoal/
 
 | Criterion | Where to find it |
 |-----------|-----------------|
-| **x402 usage** | `backend/app/services/x402.py`, premium insights endpoint, README pricing table |
+| **x402 usage** | `backend/app/services/x402.py` (testnet-ready), x402 fee deducted from balance, premium insights endpoint |
 | **CCTP usage** | `backend/app/services/cctp.py`, wallet API, honest stub documentation |
 | **MCP Server** | `mcp-server/server.py` (3 tools), `mcp-server/MCP_README.md` (Claude/Cursor setup) |
 | **Agent Skills** | `agent-skills/predictgoal-odds/` (installable SKILL.md + Python module) |
 | **Injective integrated** | x402 pricing, CCTP stubs, testnet config, Injective RPC/chain_id |
 | **Problem solved** | README "What It Does" section |
-| **User experience** | `frontend/` — filters, flags, predictions, leaderboard, wallet |
+| **User experience** | `frontend/` — filters, flags, predictions, leaderboard, wallet, potential win display |
+| **Security** | Admin auth, settlement idempotency, input validation, per-user locks, balance locking |
+| **Data persistence** | `backend/app/store.py` — JSON file store survives Render restarts |
 
 ---
 
