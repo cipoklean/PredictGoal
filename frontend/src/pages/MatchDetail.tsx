@@ -227,12 +227,25 @@ export default function MatchDetailPage() {
 
           {/* Potential payout */}
           {analytics && !isNaN(parseFloat(stake)) && parseFloat(stake) > 0 && (
-            <div className="mt-4 rounded-xl bg-[rgba(21,190,83,0.05)] border border-[rgba(21,190,83,0.12)] px-4 py-3 flex items-center justify-between">
-              <span className="text-xs font-bold text-[#7b7f92] uppercase tracking-widest">Potential Win</span>
-              <span className="text-sm font-bold text-[#15be53] font-mono tabular-nums">
-                +{parseFloat(stake).toFixed(1)} USDC
-                <span className="text-[10px] text-[#7b7f92] ml-1.5 font-normal">(2x payout on correct prediction)</span>
-              </span>
+            <div className="mt-4 space-y-2">
+              <div className="rounded-xl bg-[rgba(21,190,83,0.05)] border border-[rgba(21,190,83,0.12)] px-4 py-3 flex items-center justify-between">
+                <span className="text-xs font-bold text-[#7b7f92] uppercase tracking-widest">Potential Win</span>
+                <span className="text-sm font-bold text-[#15be53] font-mono tabular-nums">
+                  +{parseFloat(stake).toFixed(1)} USDC
+                  <span className="text-[10px] text-[#7b7f92] ml-1.5 font-normal">(2x payout on correct prediction)</span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] text-[#4d5063] flex items-center gap-1">
+                  Stake {parseFloat(stake).toFixed(1)} USDC
+                </span>
+                <span className="text-[11px] text-[#4d5063] flex items-center gap-1">
+                  + 2.0 USDC platform fee
+                </span>
+                <span className="text-[11px] font-semibold text-[#e8eaf0]">
+                  Total: {(parseFloat(stake) + 2.0).toFixed(1)} USDC
+                </span>
+              </div>
             </div>
           )}
 

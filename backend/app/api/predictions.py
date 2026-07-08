@@ -122,12 +122,16 @@ async def place_prediction(request: Request, body: PredictionCreate):
     if body.stake_usdc > 100:
         raise HTTPException(status_code=400, detail="Maximum stake is 100 USDC")
 
+    # x402 platform fee (2 USDC per prediction on top of stake)
+    x402_fee = 2.0
+
     # Atomic per-user prediction placement (prevents race conditions)
     user_lock = await _get_user_lock(user_address)
     async with user_lock:
-        # Deduct from balance (persisted via store)
+        # Deduct stake + x402 fee from balance (persisted via store)
+        total_cost = body.stake_usdc + x402_fee
         try:
-            debit_balance(user_address, body.stake_usdc)
+            debit_balance(user_address, total_cost)
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
