@@ -33,29 +33,21 @@ class Settings(BaseSettings):
     X402_PAYMENT_RECIPIENT: str = ""
     X402_PROTOCOL_FEE_BPS: int = 50
 
-    # Admin
+    # Admin — required for settlement. No default (must be set in env).
     ADMIN_SETTLE_KEY: str = ""
 
     # World Cup Data
     FOOTBALL_DATA_API_KEY: str = ""
     FOOTBALL_DATA_COMPETITION_CODE: str = "WC"
 
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
-
-    # Database
-    DATABASE_URL: str = "sqlite+aiosqlite:///./app.db"
-
-    # Security
-    JWT_SECRET_KEY: str = ""
-    ADMIN_SETTLE_KEY: str = "dev-settle-key-change-me"
-    ADMIN_WALLET_ADDRESS: str = ""
-
-    # CORS
+    # CORS — comma-separated origins
     CORS_ORIGINS: List[str] = ["http://localhost:5173"]
 
-    # Monitoring
-    HEALTH_CHECK_ENABLED: bool = True  # set to false to disable /health for production
+    # Monitoring — set to false to disable /health endpoint
+    HEALTH_CHECK_ENABLED: bool = True
+
+    # Redis (optional — not used by MVP)
+    REDIS_URL: str = "redis://localhost:6379/0"
 
 
 @lru_cache
