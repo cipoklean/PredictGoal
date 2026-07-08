@@ -12,7 +12,7 @@ A non-custodial, micro-stakes prediction market for World Cup 2026 matches with 
 ## What It Does
 
 World Cup fans can:
-- Browse **104 live World Cup 2026 matches** with real data from football-data.org
+- Browse **World Cup 2026 matches** with real data from football-data.org (104 matches when API key is set; 4 demo placeholder matches otherwise)
 - View **AI-generated win probabilities** (Home/Draw/Away) via ELO + Poisson scoreline simulation
 - Place **micro-stake predictions** (1–100 USDC stake + 2 USDC x402 fee) via Injective x402 pay-per-use
 - Get **premium AI insights** — momentum, form analysis, key player impact (x402-gated)
@@ -80,13 +80,13 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Match data (104 matches) | **Live** | football-data.org API with 60s cache |
+| Match data | **Live** | football-data.org API with 60s cache (4 demo placeholders if no key) |
 | AI win probabilities | **Live** | ELO + Poisson scoreline simulation, deterministic |
 | Predictions (CRUD) | **Live** | Persistent JSON store, locked at kickoff |
 | Leaderboard | **Live** | Server-computed, all predictions tracked |
 | Settlement | **Live** | Admin-key gated, idempotent, reentrancy-safe, credits winners |
 | x402 fee deduction | **Live** | 2 USDC deducted from balance per prediction |
-| Premium insights | **x402-gated** | Real verification via x402.org facilitator (Base Sepolia) |
+| Premium insights | **x402-gated** | Real payment verification via x402.org facilitator (Base Sepolia). Insight *content* (momentum, form, key-player) is **simulated** from the ELO model — not real match data |
 | CCTP deposit/withdraw | **Stubbed** | Returns success with mock tx hash; real testnet CCTP requires Injective-side Circle support |
 | MCP Server settlement | **Live** | Local stdio only, not connected to backend |
 | Agent Skills package | **Live** | Drop-in module, works standalone |
@@ -174,6 +174,8 @@ npm install
 npm run dev
 ```
 
+> **Note:** The frontend talks to the backend via `/api` (Vite dev proxy). For a production build served separately from the API, set `VITE_API_BASE` to your backend URL (e.g. `https://predictgoal.onrender.com/api`) in a `.env` file in `frontend/`.
+
 Open http://localhost:5173
 
 ### Agent Skills
@@ -210,6 +212,7 @@ cd mcp-server && uv run pytest tests/ -v  # 6 tests
 | GET | `/api/predictions/me` | My predictions | Wallet addr | Free |
 | GET | `/api/predictions/leaderboard` | Leaderboard (all predictions) | — | Free |
 | POST | `/api/predictions/settle` | Admin settlement | Admin key | Free |
+| GET | `/api/wallet/balance` | Check USDC balance | Wallet addr | Free |
 | POST | `/api/wallet/deposit` | CCTP deposit | Wallet addr | Free |
 | POST | `/api/wallet/withdraw` | CCTP withdraw | Wallet addr | 0.5 USDC |
 | GET | `/health` | Health check (GET + HEAD) | — | Free |
@@ -220,7 +223,6 @@ cd mcp-server && uv run pytest tests/ -v  # 6 tests
 
 ```
 predictgoal/
-├── SPEC.md                      # Design spec
 ├── README.md                    # This file
 ├── render.yaml                  # Render Blueprint
 ├── runtime.txt                  # Python version for Render
