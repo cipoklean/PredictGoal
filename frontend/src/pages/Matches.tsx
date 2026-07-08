@@ -65,13 +65,15 @@ export default function MatchesPage() {
       .catch(() => setPredictions([]));
   }, []);
 
-  const filtered = matches.filter((m) => {
-    if (filter === "all") return true;
-    if (filter === "live") return m.status === "live";
-    if (filter === "upcoming") return m.status === "scheduled";
-    if (filter === "finished") return m.status === "finished";
-    return true;
-  });
+  const filtered = matches
+    .filter((m) => {
+      if (filter === "all") return true;
+      if (filter === "live") return m.status === "live";
+      if (filter === "upcoming") return m.status === "scheduled";
+      if (filter === "finished") return m.status === "finished";
+      return true;
+    })
+    .sort((a, b) => new Date(b.kickoff_utc).getTime() - new Date(a.kickoff_utc).getTime());
 
   if (loading) return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 animate-fade-in-up space-y-3">
