@@ -77,6 +77,7 @@ app.include_router(insights_router)
 
 
 @app.get("/health")
+@app.head("/health")
 async def health_check():
     """Health check endpoint for uptime monitoring (UptimeRobot, etc.).
     
