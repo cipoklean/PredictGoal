@@ -73,7 +73,15 @@ export default function MatchesPage() {
       if (filter === "finished") return m.status === "finished";
       return true;
     })
-    .sort((a, b) => new Date(b.kickoff_utc).getTime() - new Date(a.kickoff_utc).getTime());
+    .sort((a, b) => {
+      const aTBD = a.home_team === "TBD" || a.away_team === "TBD";
+      const bTBD = b.home_team === "TBD" || b.away_team === "TBD";
+      // Push TBD matches to the bottom regardless of date
+      if (aTBD && !bTBD) return 1;
+      if (!aTBD && bTBD) return -1;
+      // Within TBDs and within real matches: newest first
+      return new Date(b.kickoff_utc).getTime() - new Date(a.kickoff_utc).getTime();
+    });
 
   if (loading) return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 animate-fade-in-up space-y-3">
