@@ -59,6 +59,28 @@ ELO: dict[str, float] = {
 }
 
 
+def _poisson_prob(k: int, lam: float) -> float:
+    """Poisson probability mass function: P(X = k)."""
+    return (lam ** k) * math.exp(-lam) / math.factorial(k)
+
+
+def _poisson_sim(home_xg: float, away_xg: float, max_goals: int = 10) -> tuple[float, float, float]:
+    """Simulate home_win / draw / away_win by summing Poisson scoreline probabilities."""
+    home_win = 0.0
+    draw_prob = 0.0
+    away_win = 0.0
+    for i in range(max_goals + 1):
+        for j in range(max_goals + 1):
+            prob = _poisson_prob(i, home_xg) * _poisson_prob(j, away_xg)
+            if i > j:
+                home_win += prob
+            elif i == j:
+                draw_prob += prob
+            else:
+                away_win += prob
+    return home_win, draw_prob, away_win
+
+
 # ── Tool 1: get_match_data ─────────────────────────────
 
 @mcp.tool()
@@ -105,13 +127,8 @@ async def calculate_odds(match_id: str, ctx: Context) -> str:
     home_xg = max(0.3, 1.2 + elo_diff * 0.0015)
     away_xg = max(0.3, 1.2 - elo_diff * 0.0015)
 
-    # Poisson-based win probabilities (logistic approximation)
-    def logistic(x: float) -> float:
-        return 1.0 / (1.0 + math.exp(-x / 2.0))
-
-    home_win = logistic(home_xg - away_xg)
-    away_win = logistic(away_xg - home_xg)
-    draw_prob = round(1.0 - home_win - away_win, 4)
+    # Proper Poisson simulation: sum over all scorelines 0..10
+    home_win, draw_prob, away_win = _poisson_sim(home_xg, away_xg)
 
     # Live match adjustment
     home_score = match.get("home_score")
@@ -142,7 +159,7 @@ async def calculate_odds(match_id: str, ctx: Context) -> str:
         "win_prob_home": round(home_win, 4),
         "win_prob_draw": draw_prob,
         "win_prob_away": round(away_win, 4),
-        "model": "ELO + Poisson (logistic approximation)",
+        "model": "ELO + Poisson (scoreline simulation)",
         "home_elo": home_elo,
         "away_elo": away_elo,
         "home_xg": round(home_xg, 2),

@@ -42,12 +42,8 @@ def calculate_win_probabilities(
     home_xg = max(0.3, 1.2 + elo_diff * 0.0015)
     away_xg = max(0.3, 1.2 - elo_diff * 0.0015)
 
-    # Poisson-based probabilities (simplified)
-    # P(home win) = sum_{i>j} P(home=i) * P(away=j)
-    # For demo, approximate with logistic function
-    home_win = _logistic(home_xg - away_xg, scale=2.0)
-    away_win = _logistic(away_xg - home_xg, scale=2.0)
-    draw_prob = 1.0 - home_win - away_win
+    # Proper Poisson simulation: sum over all scorelines 0..10
+    home_win, draw_prob, away_win = _poisson_sim(home_xg, away_xg)
 
     # If match is live, adjust based on current score
     if home_score is not None and away_score is not None:
@@ -84,6 +80,23 @@ def calculate_win_probabilities(
     )
 
 
-def _logistic(x: float, scale: float = 1.0) -> float:
-    """Logistic function: 1 / (1 + e^(-x/scale))."""
-    return 1.0 / (1.0 + math.exp(-x / scale))
+def _poisson_prob(k: int, lam: float) -> float:
+    """Poisson probability mass function: P(X = k)."""
+    return (lam ** k) * math.exp(-lam) / math.factorial(k)
+
+
+def _poisson_sim(home_xg: float, away_xg: float, max_goals: int = 10) -> tuple[float, float, float]:
+    """Simulate home_win / draw / away_win by summing Poisson scoreline probabilities."""
+    home_win = 0.0
+    draw_prob = 0.0
+    away_win = 0.0
+    for i in range(max_goals + 1):
+        for j in range(max_goals + 1):
+            prob = _poisson_prob(i, home_xg) * _poisson_prob(j, away_xg)
+            if i > j:
+                home_win += prob
+            elif i == j:
+                draw_prob += prob
+            else:
+                away_win += prob
+    return home_win, draw_prob, away_win
