@@ -306,3 +306,49 @@ async def test_404_does_not_leak_stack(client):
     data = response.json()
     assert "traceback" not in str(data).lower()
     assert "File" not in str(data)
+
+
+# ── Auto-settlement ────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_auto_settle_finished_match(monkeypatch):
+    """A finished match with a known score should be auto-settled."""
+    from app.api import predictions as pred_module
+    from app import store as store_module
+    import uuid
+
+    match_id = "WC2026-AUTOTEST"
+    pred_id = str(uuid.uuid4())
+    record = {
+        "prediction_id": pred_id,
+        "user_address": PRED_HEADERS["X-User-Address"],
+        "match_id": match_id,
+        "outcome": "home",
+        "stake_usdc": 5.0,
+        "placed_at": "2026-07-10T00:00:00+00:00",
+        "tx_hash": "x402_tx_test",
+        "settled": False,
+        "payout_usdc": None,
+    }
+    store_module.add_prediction(pred_id, record)
+
+    # Stub the feed to report this match as finished 3-1 (home wins)
+    async def fake_fetch():
+        return [{
+            "match_id": match_id,
+            "home_team": "Home",
+            "away_team": "Away",
+            "kickoff_utc": "2026-07-09T20:00:00Z",
+            "status": "finished",
+            "home_score": 3,
+            "away_score": 1,
+        }]
+
+    monkeypatch.setattr(pred_module, "fetch_upcoming_matches", fake_fetch)
+
+    await pred_module._auto_settle_finished_matches()
+
+    updated = store_module.get_predictions()[pred_id]
+    assert updated["settled"] is True
+    assert updated["payout_usdc"] == 10.0  # 2x stake
+    assert store_module.is_match_settled(match_id)

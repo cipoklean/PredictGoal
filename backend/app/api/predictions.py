@@ -233,42 +233,17 @@ async def get_leaderboard():
 # ── POST /api/predictions/settle ────────────────────────────
 
 
-@router.post("/settle")
-async def settle_market(request: Request):
+# ── Shared settlement core ──────────────────────────────
+# Used by BOTH the admin endpoint and the background auto-settler.
+# Idempotent + reentrancy-safe. No admin-key check — caller is trusted.
+
+async def _settle_match_internal(match_id: str, home_score: int, away_score: int) -> dict:
     """
-    Settle a prediction market after match completion.
-    
-    ADMIN-ONLY: requires X-Admin-Key header matching ADMIN_SETTLE_KEY.
-    Idempotent: calling twice returns same result.
-    Reentrancy-safe: per-match asyncio.Lock.
+    Resolve all predictions for a match given the final score.
+
+    Idempotent: if already settled, returns immediately.
+    Reentrancy-safe: per-match asyncio.Lock prevents double-payout.
     """
-    try:
-        body = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-
-    match_id = body.get("match_id", "")
-    home_score = body.get("home_score")
-    away_score = body.get("away_score")
-    admin_key = request.headers.get("X-Admin-Key", "")
-
-    if not match_id:
-        raise HTTPException(status_code=400, detail="match_id is required")
-
-    # ── AUTH GUARD ──
-    if not ADMIN_SETTLE_KEY:
-        logger.error("ADMIN_SETTLE_KEY is not configured — settlement rejected")
-        raise HTTPException(
-            status_code=401,
-            detail="Settlement is not configured on this server (no admin key set)",
-        )
-    if admin_key != ADMIN_SETTLE_KEY:
-        raise HTTPException(status_code=401, detail="Unauthorized: invalid admin key")
-
-    if home_score is None or away_score is None:
-        raise HTTPException(status_code=400, detail="home_score and away_score are required")
-
-    # ── IDEMPOTENCY GUARD ──
     if store.is_match_settled(match_id):
         return {
             "status": "already_settled",
@@ -276,7 +251,6 @@ async def settle_market(request: Request):
             "message": "Market already settled. No duplicate action taken.",
         }
 
-    # ── REENTRANCY GUARD ──
     async with _settlement_locks_guard:
         if match_id not in _settlement_locks:
             _settlement_locks[match_id] = asyncio.Lock()
@@ -337,3 +311,82 @@ async def settle_market(request: Request):
             "winners_count": len(winners),
             "message": f"Market for {match_id} settled. Outcome: {actual_outcome}. {len(winners)} winning predictions.",
         }
+
+
+# ── POST /api/predictions/settle (admin) ────────────────
+
+@router.post("/settle")
+async def settle_market(request: Request):
+    """
+    Settle a prediction market after match completion.
+
+    ADMIN-ONLY: requires X-Admin-Key header matching ADMIN_SETTLE_KEY.
+    Idempotent: calling twice returns same result.
+    Reentrancy-safe: per-match asyncio.Lock.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    match_id = body.get("match_id", "")
+    home_score = body.get("home_score")
+    away_score = body.get("away_score")
+    admin_key = request.headers.get("X-Admin-Key", "")
+
+    if not match_id:
+        raise HTTPException(status_code=400, detail="match_id is required")
+
+    # ── AUTH GUARD ──
+    if not ADMIN_SETTLE_KEY:
+        logger.error("ADMIN_SETTLE_KEY is not configured — settlement rejected")
+        raise HTTPException(
+            status_code=401,
+            detail="Settlement is not configured on this server (no admin key set)",
+        )
+    if admin_key != ADMIN_SETTLE_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized: invalid admin key")
+
+    if home_score is None or away_score is None:
+        raise HTTPException(status_code=400, detail="home_score and away_score are required")
+
+    return await _settle_match_internal(match_id, home_score, away_score)
+
+
+# ── Background auto-settlement ──────────────────────────
+
+async def _auto_settle_finished_matches() -> None:
+    """
+    Sweep finished matches that have a known full-time score and settle them
+    using the football-data feed's score. Skips unsettled-but-scoreless or
+    already-settled matches.
+    """
+    matches = await fetch_upcoming_matches()
+    for m in matches:
+        if m.get("status") != "finished":
+            continue
+        home_score = m.get("home_score")
+        away_score = m.get("away_score")
+        if home_score is None or away_score is None:
+            # Score not yet reported — wait for the next sweep.
+            continue
+        match_id = m["match_id"]
+        if store.is_match_settled(match_id):
+            continue
+        result = await _settle_match_internal(match_id, home_score, away_score)
+        logger.info("Auto-settled %s -> %s", match_id, result.get("status"))
+
+
+async def start_auto_settle() -> None:
+    """Long-running background task that periodically auto-settles finished matches."""
+    if not settings.AUTO_SETTLE_ENABLED:
+        logger.info("Auto-settlement disabled (AUTO_SETTLE_ENABLED=false)")
+        return
+    interval = max(10, settings.AUTO_SETTLE_INTERVAL_SECONDS)
+    logger.info("Auto-settlement task started (interval=%ss)", interval)
+    while True:
+        try:
+            await _auto_settle_finished_matches()
+        except Exception:
+            logger.exception("Auto-settlement sweep failed")
+        await asyncio.sleep(interval)

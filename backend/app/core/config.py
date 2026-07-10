@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     # Admin — required for settlement. No default (must be set in env).
     ADMIN_SETTLE_KEY: str = ""
 
+    # Auto-settlement — resolves finished matches using the football-data score.
+    # When enabled, a background task sweeps matches the feed reports as
+    # FINISHED (with a known full-time score) and settles them automatically.
+    AUTO_SETTLE_ENABLED: bool = True
+    AUTO_SETTLE_INTERVAL_SECONDS: int = 60
+
     # World Cup Data
     FOOTBALL_DATA_API_KEY: str = ""
     FOOTBALL_DATA_COMPETITION_CODE: str = "WC"

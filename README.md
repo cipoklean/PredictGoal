@@ -18,7 +18,7 @@ World Cup fans can:
 - Get **premium AI insights** — momentum, form analysis, key player impact (x402-gated)
 - Compete on a global **leaderboard** (all predictions tracked, ranked by total won)
 - Deposit and withdraw testnet USDC via **CCTP** cross-chain bridge (stubbed)
-- Markets are **admin-settled** post-match via backend API or MCP Server agent
+- Markets are **auto-settled** when the football-data feed reports a finished match with a score (background sweeper), and can also be manually settled via the backend API or MCP Server agent
 - **Agent Skills package** (`predictgoal-odds`) — installable by Claude Code/Cursor/Gemini CLI
 
 ---
@@ -84,7 +84,7 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 | AI win probabilities | **Live** | ELO + Poisson scoreline simulation, deterministic |
 | Predictions (CRUD) | **Live** | Persistent JSON store, locked at kickoff |
 | Leaderboard | **Live** | Server-computed, all predictions tracked |
-| Settlement | **Live** | Admin-key gated, idempotent, reentrancy-safe, credits winners |
+| Settlement | **Live** | Auto-settles finished matches from the football-data feed (background sweeper, idempotent + reentrancy-safe); also admin-key gated manual endpoint; credits winners |
 | x402 fee deduction | **Live** | 2 USDC deducted from balance per prediction |
 | Premium insights | **x402-gated** | Real payment verification via x402.org facilitator (Base Sepolia). Insight *content* (momentum, form, key-player) is **simulated** from the ELO model — not real match data |
 | CCTP deposit/withdraw | **Stubbed** | Returns success with mock tx hash; real testnet CCTP requires Injective-side Circle support |

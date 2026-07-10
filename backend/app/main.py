@@ -1,6 +1,9 @@
 """FastAPI application entry point for PredictGoal backend."""
 
+import asyncio
 import logging
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,8 +40,26 @@ except ImportError:
     _has_rate_limiter = False
     logger.warning("slowapi not installed — rate limiting disabled")
 
+# Background auto-settlement of finished matches (uses football-data scores)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = None
+    if settings.AUTO_SETTLE_ENABLED:
+        from app.api.predictions import start_auto_settle
+        task = asyncio.create_task(start_auto_settle())
+        logger.info("Auto-settlement background task scheduled")
+    yield
+    if task is not None:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
 # Create FastAPI app
 app = FastAPI(
+    lifespan=lifespan,
     title="PredictGoal — Prediction Market API",
     description=(
         "Non-custodial World Cup 2026 prediction market. "
