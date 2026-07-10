@@ -27,15 +27,19 @@ World Cup fans can:
 
 ### 🔐 x402 — Pay-per-Use Prediction + Premium Insights
 
-Every prediction (`POST /api/predictions`) and premium insight (`GET /api/insights/{match_id}`) accepts an **x402 payment proof** header and validates it via the x402.org facilitator. Enforcement is active only when `X402_PAYMENT_RECIPIENT` is configured; otherwise it is a dev-mode passthrough. (The frontend does not yet generate proofs, so enforcement stays dormant until that is added.)
+Every prediction (`POST /api/predictions`) and premium insight (`GET /api/insights/{match_id}`) accepts an **x402 payment proof** header and validates it via the x402.org facilitator. Enforcement is active only when `X402_PAYMENT_RECIPIENT` is configured; otherwise it is a dev-mode passthrough.
+
+**Frontend is wired:** the browser client (`src/x402Client.ts`) connects MetaMask (Base Sepolia) and wraps `fetch` with `@x402/fetch`'s `wrapFetchWithPaymentFromConfig` + `@x402/evm`'s `ExactEvmScheme`. Every API call routes through that wrapped fetch once "⚡ Connect Payments" is clicked, so a `POST /api/predictions` (or `GET /api/insights/{id}`) automatically signs a 2.0 / 0.5 USDC USDC payment proof and retries on the `402`. The backend responds with the v2 `X-Payment-Requirements` envelope (CORS-exposed), which the client parses and pays.
 
 | Endpoint | Price | Status |
 |----------|-------|--------|
-| `POST /api/predictions` | 2.0 USDC | Testnet-ready (x402.org facilitator, Base Sepolia) |
-| `GET /api/insights/{id}` | 0.5 USDC | Testnet-ready (x402 facilitator) |
+| `POST /api/predictions` | 2.0 USDC | **Live** — frontend signs proof via MetaMask (x402.org facilitator, Base Sepolia) |
+| `GET /api/insights/{id}` | 3.0 USDC | **Live** — backend enforces; surfaced in Match Detail "Premium Insights" panel (MetaMask x402 pay) |
 | `POST /api/wallet/withdraw` | 0.5 USDC | Stubbed |
 
-**Implementation:** `backend/app/services/x402.py` — uses the `x402[fastapi,evm]` Python SDK with the free x402.org facilitator for testnet payment verification. Falls back to dev-mode passthrough when no payment recipient is configured.
+**Implementation:** `backend/app/services/x402.py` — uses the `x402[fastapi,evm]` Python SDK with the free x402.org facilitator for testnet payment verification. Falls back to dev-mode passthrough when no payment recipient is configured. Frontend: `src/x402Client.ts`, `src/api.ts` (`getPaymentFetch()`), `src/components/ConnectPayment.tsx`.
+
+**Config (production):** set `X402_PAYMENT_RECIPIENT` to a real **Base Sepolia** (`eip155:84532`) address holding USDC — the signed payment settles to that address on Base Sepolia. The facilitator is `https://x402.org/facilitator` (testnet).
 
 ### 🌉 CCTP — Cross-Chain USDC Transfers
 

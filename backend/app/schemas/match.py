@@ -62,6 +62,9 @@ class PredictionResponse(BaseModel):
     prediction_id: UUID
     user_address: str
     match_id: str
+    home_team: str | None = None
+    away_team: str | None = None
+    kickoff_utc: datetime | None = None
     outcome: PredictionOutcome
     stake_usdc: float
     placed_at: datetime

@@ -1,3 +1,5 @@
+import { getPaymentFetch, getPaymentAddress, isPaymentConnected } from "./x402Client";
+
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
 let _walletAddress = "";
@@ -7,10 +9,12 @@ export function setWalletAddress(addr: string) {
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
+  const send = getPaymentFetch() ?? fetch;
+  const userAddr = isPaymentConnected() ? getPaymentAddress() : _walletAddress;
+  const res = await send(`${API_BASE}${url}`, {
     headers: {
       "Content-Type": "application/json",
-      "X-User-Address": _walletAddress || "",
+      "X-User-Address": userAddr || "",
       ...options?.headers,
     },
     ...options,
@@ -69,6 +73,21 @@ export const api = {
       win_prob_away: number;
       key_stats: Record<string, unknown>;
     }>(`/matches/${id}/analytics`),
+
+  getPremiumInsight: (id: string) =>
+    request<{
+      match_id: string;
+      home_team: string;
+      away_team: string;
+      win_prob_home: number;
+      win_prob_draw: number;
+      win_prob_away: number;
+      momentum: Record<string, unknown>;
+      form_analysis: Record<string, unknown>;
+      key_player_impact: Record<string, unknown>;
+      data_source: string;
+      disclaimer: string;
+    }>(`/insights/${id}`),
 
   placePrediction: (data: {
     match_id: string;

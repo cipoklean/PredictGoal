@@ -352,3 +352,58 @@ async def test_auto_settle_finished_match(monkeypatch):
     assert updated["settled"] is True
     assert updated["payout_usdc"] == 10.0  # 2x stake
     assert store_module.is_match_settled(match_id)
+
+
+@pytest.mark.asyncio
+async def test_auto_settle_rescues_drifted_match_id(monkeypatch):
+    """A bet keyed to a match_id that later drifts in the feed must still settle
+    via the (home_team, away_team, kickoff_utc) signature fallback.
+
+    Uses unique ids (old != new) so it can't collide with persisted store state.
+    """
+    from app.api import predictions as pred_module
+    from app import store as store_module
+    import uuid
+
+    suffix = uuid.uuid4().hex[:8]
+    old_id = f"WC2026-DRIFT-{suffix}-OLD"
+    new_id = f"WC2026-DRIFT-{suffix}-NEW"
+
+    # Bet placed under the OLD positional id, carrying durable identity.
+    pred_id = str(uuid.uuid4())
+    record = {
+        "prediction_id": pred_id,
+        "user_address": PRED_HEADERS["X-User-Address"],
+        "match_id": old_id,
+        "home_team": "France",
+        "away_team": "Morocco",
+        "kickoff_utc": "2026-07-10T19:00:00Z",
+        "outcome": "home",
+        "stake_usdc": 5.0,
+        "placed_at": "2026-07-09T00:00:00+00:00",
+        "tx_hash": "x402_tx_test",
+        "settled": False,
+        "payout_usdc": None,
+    }
+    store_module.add_prediction(pred_id, record)
+
+    # Feed NOW reports France vs Morocco at a DIFFERENT id (drift). Same teams+kickoff.
+    async def fake_fetch():
+        return [{
+            "match_id": new_id,
+            "home_team": "France",
+            "away_team": "Morocco",
+            "kickoff_utc": "2026-07-10T19:00:00Z",
+            "status": "finished",
+            "home_score": 2,
+            "away_score": 1,
+        }]
+
+    monkeypatch.setattr(pred_module, "fetch_upcoming_matches", fake_fetch)
+
+    await pred_module._auto_settle_finished_matches()
+
+    updated = store_module.get_predictions()[pred_id]
+    assert updated["settled"] is True
+    assert updated["payout_usdc"] == 10.0  # 2x stake
+    assert store_module.is_match_settled(new_id)

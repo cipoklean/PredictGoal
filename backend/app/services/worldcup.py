@@ -36,10 +36,19 @@ async def fetch_upcoming_matches() -> list[dict]:
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-            parsed = _parse_matches(data.get("matches", []))
+            raw: list[dict] = []
+            next_url: str | None = url
+            pages = 0
+            while next_url and pages < 10:
+                pages += 1
+                response = await client.get(next_url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                raw.extend(data.get("matches", []))
+                # football-data v4 signals further pages via paging.next
+                nxt = (data.get("paging") or {}).get("next")
+                next_url = nxt if nxt else None
+            parsed = _parse_matches(raw)
             # Update cache on success
             _cached_matches = parsed
             _cache_updated_at = now
@@ -54,19 +63,41 @@ async def fetch_upcoming_matches() -> list[dict]:
             return _placeholder_matches()
 
 
+def _extract_score(m: dict, side: str) -> int | None:
+    """Pull a full-time score, tolerating a couple of football-data shapes."""
+    score = m.get("score") or {}
+    ft = score.get("fullTime") or {}
+    val = ft.get("home" if side == "home" else "away")
+    if val is None:
+        rt = score.get("regularTime") or {}
+        val = rt.get("home" if side == "home" else "away")
+    return val
+
+
 def _parse_matches(raw_matches: list[dict]) -> list[dict]:
-    """Parse raw football-data.org response into our schema."""
+    """Parse raw football-data.org response into our schema.
+
+    IMPORTANT: match_id is assigned by STABLE kickoff order, NOT by the raw
+    array index. The football-data feed can reorder/paginate matches between
+    calls, so a positional index would drift and strand predictions whose
+    stored match_id no longer matches the feed. Sorting by kickoff makes the
+    WC2026-M{n} id stable for a fixed fixture list.
+    """
     parsed = []
-    for i, m in enumerate(raw_matches):
+    for m in raw_matches:
         parsed.append({
-            "match_id": f"WC2026-M{i + 1}",
+            "match_id": None,  # assigned after stable sort
             "home_team": _safe_team_name(m.get("homeTeam", {}).get("name")),
             "away_team": _safe_team_name(m.get("awayTeam", {}).get("name")),
-            "kickoff_utc": m.get("utcDate", datetime.now(timezone.utc).isoformat()),
+            "kickoff_utc": m.get("utcDate") or datetime.now(timezone.utc).isoformat(),
             "status": _map_status(m.get("status", "SCHEDULED")),
-            "home_score": m.get("score", {}).get("fullTime", {}).get("home"),
-            "away_score": m.get("score", {}).get("fullTime", {}).get("away"),
+            "home_score": _extract_score(m, "home"),
+            "away_score": _extract_score(m, "away"),
         })
+    # Deterministic order -> stable match_id regardless of feed array order.
+    parsed.sort(key=lambda x: x["kickoff_utc"] or "")
+    for i, mm in enumerate(parsed):
+        mm["match_id"] = f"WC2026-M{i + 1}"
     return parsed
 
 

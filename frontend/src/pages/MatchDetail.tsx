@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Match } from "../api";
+import { isPaymentConnected } from "../x402Client";
+
+type PremiumInsight = Awaited<ReturnType<typeof api.getPremiumInsight>>;
 
 const COUNTRY_FLAGS: Record<string, string> = {
   Argentina: "ar", Brazil: "br", Germany: "de", France: "fr",
@@ -26,6 +29,11 @@ export default function MatchDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Premium insights (x402-gated)
+  const [insight, setInsight] = useState<PremiumInsight | null>(null);
+  const [loadingInsight, setLoadingInsight] = useState(false);
+  const [insightError, setInsightError] = useState("");
+
   useEffect(() => {
     if (!id) return;
     Promise.all([api.getMatch(id), api.getMatchAnalytics(id)])
@@ -48,6 +56,17 @@ export default function MatchDetailPage() {
       setMsgType("error");
       setMsg(e instanceof Error ? e.message : "Unknown error");
     } finally { setSubmitting(false); }
+  };
+
+  const loadInsight = async () => {
+    if (!id) return;
+    setLoadingInsight(true); setInsightError("");
+    try {
+      const data = await api.getPremiumInsight(id);
+      setInsight(data);
+    } catch (e: unknown) {
+      setInsightError(e instanceof Error ? e.message : "Failed to load insight");
+    } finally { setLoadingInsight(false); }
   };
 
   if (loading) return (
@@ -177,6 +196,91 @@ export default function MatchDetailPage() {
         </div>
       )}
 
+      {/* Premium Insights */}
+      <div className="rounded-2xl border border-[rgba(83,58,253,0.1)] bg-[#11131f] p-5 sm:p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-xs font-semibold text-[#7b7f92] uppercase tracking-widest">Premium Insights</h2>
+          {insight && (
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
+              insight.data_source === "football-data"
+                ? "bg-[rgba(21,190,83,0.12)] text-[#15be53] border border-[rgba(21,190,83,0.25)]"
+                : "bg-[rgba(229,160,13,0.12)] text-[#e5a00d] border border-[rgba(229,160,13,0.25)]"
+            }`}>
+              {insight.data_source === "football-data" ? "● LIVE · football-data" : "● SIMULATED"}
+            </span>
+          )}
+        </div>
+
+        {!insight ? (
+          <div className="text-center py-2">
+            <p className="text-[#7b7f92] text-xs mb-4">
+              Momentum, real form, head-to-head &amp; top scorers — pay-per-use via x402.
+            </p>
+            <button
+              onClick={loadInsight}
+              disabled={loadingInsight}
+              className="bg-gradient-to-br from-[#533afd] to-[#7b6ff0] hover:from-[#4434d4] hover:to-[#6b5fe0] disabled:from-[#1e2140] disabled:to-[#1e2140] disabled:text-[#4d5063] text-white text-sm font-bold px-6 py-3 rounded-xl transition-all duration-200 active:scale-[0.97] shadow-[0_0_20px_rgba(83,58,253,0.25)] hover:shadow-[0_0_28px_rgba(83,58,253,0.4)]"
+            >
+              {loadingInsight ? "Unlocking..." : "⚡ Unlock Premium Insight — 3.0 USDC"}
+            </button>
+            {insightError && (
+              <p className="mt-3 text-[11px] text-[#ea2261] font-semibold">{insightError}</p>
+            )}
+            {!isPaymentConnected() && (
+              <p className="mt-3 text-[11px] text-[#7b7f92]">Connect ⚡ Payments (MetaMask, Base Sepolia) first.</p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-5 animate-fade-in-up">
+            <div>
+              <p className="text-[11px] text-[#4d5063] uppercase tracking-widest mb-2">Momentum</p>
+              <div className="space-y-2">
+                <InsightBar label={match.home_team} value={Number(insight.momentum.home_momentum)} color="from-[#15be53] to-[#0dd85f]" />
+                <InsightBar label={match.away_team} value={Number(insight.momentum.away_momentum)} color="from-[#3b82f6] to-[#60a5fa]" />
+              </div>
+              <p className="mt-2 text-[11px] text-[#7b7f92]">
+                Score pressure: <span className="text-[#a89ffa] font-semibold">{String(insight.momentum.score_pressure)}</span>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(83,58,253,0.08)] p-3">
+                <p className="text-[10px] text-[#4d5063] uppercase tracking-widest mb-1 truncate">{match.home_team}</p>
+                <p className="text-sm font-bold font-mono text-[#e8eaf0]">{String(insight.form_analysis.home_form)}</p>
+              </div>
+              <div className="rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(83,58,253,0.08)] p-3 text-center">
+                <p className="text-[10px] text-[#4d5063] uppercase tracking-widest mb-1">H2H</p>
+                <p className="text-sm font-bold font-mono text-[#e8eaf0]">{String(insight.form_analysis.head_to_head)}</p>
+              </div>
+              <div className="rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(83,58,253,0.08)] p-3 text-right">
+                <p className="text-[10px] text-[#4d5063] uppercase tracking-widest mb-1 truncate">{match.away_team}</p>
+                <p className="text-sm font-bold font-mono text-[#e8eaf0]">{String(insight.form_analysis.away_form)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-[rgba(21,190,83,0.05)] border border-[rgba(21,190,83,0.12)] p-3">
+                <p className="text-[10px] text-[#4d5063] uppercase tracking-widest mb-1">{match.home_team} key player</p>
+                <p className="text-xs font-semibold text-[#e8eaf0]">{String(insight.key_player_impact.home_star)}</p>
+              </div>
+              <div className="rounded-xl bg-[rgba(59,130,246,0.05)] border border-[rgba(59,130,246,0.12)] p-3">
+                <p className="text-[10px] text-[#4d5063] uppercase tracking-widest mb-1">{match.away_team} key player</p>
+                <p className="text-xs font-semibold text-[#e8eaf0]">{String(insight.key_player_impact.away_star)}</p>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-[#4d5063] leading-relaxed">{insight.disclaimer}</p>
+
+            <button
+              onClick={() => { setInsight(null); setInsightError(""); }}
+              className="text-[11px] text-[#7b7f92] hover:text-[#a89ffa] underline underline-offset-2 transition"
+            >
+              Reset
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Place prediction */}
       {!isFinished && (
         <div className="rounded-2xl border border-[rgba(83,58,253,0.1)] bg-[#11131f] p-5 sm:p-6">
@@ -271,6 +375,19 @@ export default function MatchDetailPage() {
           {" "}&middot; Micro-stakes only &middot; Zero real funds
         </p>
       </div>
+    </div>
+  );
+}
+
+function InsightBar({ label, value, color }: { label: string; value: number; color: string }) {
+  const pct = Math.max(2, Math.min(100, value));
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-[#7b7f92] w-20 truncate">{label}</span>
+      <div className="flex-1 h-2 rounded-full bg-[#1e2140] overflow-hidden">
+        <div className={`h-full rounded-full bg-gradient-to-r ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs font-mono text-[#e8eaf0] w-8 text-right tabular-nums">{value.toFixed(0)}</span>
     </div>
   );
 }

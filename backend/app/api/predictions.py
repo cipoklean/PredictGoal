@@ -11,6 +11,8 @@ from app import store
 from app.schemas.match import PredictionCreate, PredictionResponse, LeaderboardEntry
 from app.services.worldcup import fetch_upcoming_matches
 from app.services.balance import credit as credit_balance, debit as debit_balance
+import json
+
 from app.services import x402 as x402_service
 from app.core.config import get_settings
 
@@ -116,9 +118,14 @@ async def place_prediction(request: Request, body: PredictionCreate):
     payment_header = request.headers.get("X-402-Payment")
     payment_valid = await x402_service.verify_x402_payment(payment_header, "/api/predictions")
     if not payment_valid:
+        requirements = await x402_service.build_requirements("/api/predictions")
+        headers = (
+            {"X-Payment-Requirements": json.dumps(requirements)} if requirements else {}
+        )
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Payment required. Send an x402 payment proof in the X-402-Payment header (2.0 USDC).",
+            headers=headers,
         )
 
     # Validate stake bounds
@@ -148,6 +155,9 @@ async def place_prediction(request: Request, body: PredictionCreate):
             "prediction_id": str(prediction_id),
             "user_address": user_address,
             "match_id": body.match_id,
+            "home_team": match.get("home_team"),
+            "away_team": match.get("away_team"),
+            "kickoff_utc": match.get("kickoff_utc"),
             "outcome": body.outcome.value,
             "stake_usdc": body.stake_usdc,
             "placed_at": datetime.now(timezone.utc),
@@ -242,12 +252,23 @@ async def get_leaderboard():
 # Used by BOTH the admin endpoint and the background auto-settler.
 # Idempotent + reentrancy-safe. No admin-key check — caller is trusted.
 
-async def _settle_match_internal(match_id: str, home_score: int, away_score: int) -> dict:
+def _match_signature(m: dict) -> tuple:
+    """Stable identity for a match independent of its id: (home, away, kickoff)."""
+    return (m.get("home_team"), m.get("away_team"), m.get("kickoff_utc"))
+
+
+async def _settle_predictions(
+    prediction_ids: list[str], match_id: str, home_score: int, away_score: int
+) -> dict:
     """
-    Resolve all predictions for a match given the final score.
+    Resolve the given prediction ids for a finished match.
 
     Idempotent: if already settled, returns immediately.
     Reentrancy-safe: per-match asyncio.Lock prevents double-payout.
+
+    Settles regardless of whether the caller matched predictions by id or by
+    the (home_team, away_team, kickoff_utc) signature, so positional feed-index
+    drift can never strand a bettor.
     """
     if store.is_match_settled(match_id):
         return {
@@ -277,28 +298,30 @@ async def _settle_match_internal(match_id: str, home_score: int, away_score: int
         else:
             actual_outcome = "draw"
 
-        # Settle all predictions for this match
+        # Settle the targeted predictions
         all_preds = store.get_predictions()
         winners = []
-        for pid, p in all_preds.items():
-            if p["match_id"] == match_id:
-                p["settled"] = True
-                if p["outcome"] == actual_outcome:
-                    p["payout_usdc"] = p["stake_usdc"] * 2
-                    winners.append(pid)
-                    # Credit winner's balance with their payout
-                    try:
-                        credit_balance(p["user_address"], p["payout_usdc"])
-                        logger.info(
-                            "Settlement credit: user=%s, payout=%s USDC, pred=%s",
-                            p["user_address"][:12], p["payout_usdc"], pid[:8],
-                        )
-                    except Exception:
-                        logger.exception(
-                            "Failed to credit winner %s for pred %s",
-                            p["user_address"][:12], pid,
-                        )
-                store.update_prediction(pid, p)
+        for pid in prediction_ids:
+            p = all_preds.get(pid)
+            if p is None or p.get("settled"):
+                continue
+            p["settled"] = True
+            if p["outcome"] == actual_outcome:
+                p["payout_usdc"] = p["stake_usdc"] * 2
+                winners.append(pid)
+                # Credit winner's balance with their payout
+                try:
+                    credit_balance(p["user_address"], p["payout_usdc"])
+                    logger.info(
+                        "Settlement credit: user=%s, payout=%s USDC, pred=%s",
+                        p["user_address"][:12], p["payout_usdc"], pid[:8],
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to credit winner %s for pred %s",
+                        p["user_address"][:12], pid,
+                    )
+            store.update_prediction(pid, p)
 
         store.mark_settled(match_id, winners)
 
@@ -316,6 +339,13 @@ async def _settle_match_internal(match_id: str, home_score: int, away_score: int
             "winners_count": len(winners),
             "message": f"Market for {match_id} settled. Outcome: {actual_outcome}. {len(winners)} winning predictions.",
         }
+
+
+async def _settle_match_internal(match_id: str, home_score: int, away_score: int) -> dict:
+    """Admin path: settle every prediction whose stored match_id == match_id."""
+    all_preds = store.get_predictions()
+    target = [pid for pid, p in all_preds.items() if p.get("match_id") == match_id]
+    return await _settle_predictions(target, match_id, home_score, away_score)
 
 
 # ── POST /api/predictions/settle (admin) ────────────────
@@ -363,10 +393,17 @@ async def settle_market(request: Request):
 async def _auto_settle_finished_matches() -> None:
     """
     Sweep finished matches that have a known full-time score and settle them
-    using the football-data feed's score. Skips unsettled-but-scoreless or
-    already-settled matches.
+    using the football-data feed's score.
+
+    Matches predictions by BOTH the feed match_id AND the stable
+    (home_team, away_team, kickoff_utc) signature, so a match whose feed
+    position/index drifted between bet-time and now is still settled. Skips
+    matches with no score reported yet (waits for the next sweep) and
+    already-settled markets.
     """
     matches = await fetch_upcoming_matches()
+    all_preds = store.get_predictions()
+
     for m in matches:
         if m.get("status") != "finished":
             continue
@@ -374,12 +411,29 @@ async def _auto_settle_finished_matches() -> None:
         away_score = m.get("away_score")
         if home_score is None or away_score is None:
             # Score not yet reported — wait for the next sweep.
+            logger.info(
+                "Auto-settle: skipping %s — finished but score not yet reported",
+                m.get("match_id"),
+            )
             continue
-        match_id = m["match_id"]
-        if store.is_match_settled(match_id):
+
+        feed_id = m["match_id"]
+        sig = _match_signature(m)
+        target: list[str] = []
+        for pid, p in all_preds.items():
+            if p.get("match_id") == feed_id:
+                target.append(pid)
+                continue
+            p_sig = _match_signature(p)
+            if None not in p_sig and p_sig == sig:
+                target.append(pid)
+
+        if not target:
             continue
-        result = await _settle_match_internal(match_id, home_score, away_score)
-        logger.info("Auto-settled %s -> %s", match_id, result.get("status"))
+        if store.is_match_settled(feed_id):
+            continue
+        result = await _settle_predictions(target, feed_id, home_score, away_score)
+        logger.info("Auto-settled %s -> %s", feed_id, result.get("status"))
 
 
 async def start_auto_settle() -> None:

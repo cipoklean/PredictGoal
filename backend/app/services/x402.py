@@ -19,7 +19,7 @@ X402_FACILITATOR_URL = "https://x402.org/facilitator"
 # Endpoint pricing (USDC)
 X402_PRICING: dict[str, float] = {
     "/api/predictions": 2.0,
-    "/api/insights": 0.5,
+    "/api/insights": 3.0,
     "/api/wallet/withdraw": 0.5,
 }
 
@@ -137,6 +137,55 @@ async def verify_x402_payment(
     except Exception as e:
         logger.error("x402 verification error for %s: %s", path, e)
         return False  # configured => enforce (fail closed)
+
+
+async def build_requirements(path: str) -> Optional[dict]:
+    """Return the x402 PaymentRequired v2 ENVELOPE for `path`, or None.
+
+    The JS client (@x402/fetch) parses `X-Payment-Requirements` as a
+    PaymentRequired v2 envelope -- i.e. {"x402Version": 2, "accepts": [...],
+    "resource": {...}, ...} -- NOT a bare array of requirements. The v2 envelope
+    schema also requires a non-null `resource`, so we wrap the built requirements
+    via create_payment_required_response (passing a resource) and serialize that,
+    rather than dumping the raw list.
+
+    Returns None when x402 is not configured (dev passthrough).
+    """
+    required = X402_PRICING.get(path.rstrip("/"), 0.0)
+    server = get_x402_server()
+    if required == 0 or server is None:
+        return None
+    from x402 import ResourceConfig
+
+    config = ResourceConfig(
+        scheme="exact",
+        network=X402_NETWORK,
+        pay_to=X402_PAYMENT_RECIPIENT,
+        price=f"${required:.2f}",
+    )
+    reqs = server.build_payment_requirements(config)
+    # The v2 envelope schema the JS client (@x402/fetch) parses via its
+    # PaymentRequiredSchema requires a non-null `resource`. The Python SDK
+    # serializes every optional field as explicit `null` (e.g. error:null,
+    # resource.mimeType:null). zod's `.optional()` accepts a MISSING
+    # field but REJECTS explicit `null`, so those would fail client-side
+    # parsing. We strip all nulls so optional fields are simply absent.
+    # create_payment_required_response is async on x402ResourceServer.
+    envelope = await server.create_payment_required_response(
+        reqs,
+        resource={"url": path},
+    )
+    return _strip_nulls(envelope.model_dump(mode="json"))
+
+
+def _strip_nulls(obj):
+    """Recursively drop explicit ``None`` values so zod `.optional()` fields
+    (which reject ``null`` but accept a missing key) parse cleanly."""
+    if isinstance(obj, dict):
+        return {k: _strip_nulls(v) for k, v in obj.items() if v is not None}
+    if isinstance(obj, (list, tuple)):
+        return [_strip_nulls(v) for v in obj if v is not None]
+    return obj
 
 
 def load_config(payment_recipient: str):

@@ -1,7 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import ConnectWallet from "./components/ConnectWallet";
+import ConnectPayment from "./components/ConnectPayment";
 import { setWalletAddress as updateApiWallet } from "./api";
+import { disconnectPaymentWallet } from "./x402Client";
 import MatchesPage from "./pages/Matches";
 import MatchDetailPage from "./pages/MatchDetail";
 import LeaderboardPage from "./pages/Leaderboard";
@@ -60,6 +62,7 @@ function Navbar({
           )}
 
           <ConnectWallet address={walletAddress} onConnect={onConnect} onDisconnect={onDisconnect} />
+          <ConnectPayment onAddress={onConnect} />
         </div>
       </div>
     </nav>
@@ -91,6 +94,7 @@ export default function App() {
   };
 
   const handleDisconnect = () => {
+    disconnectPaymentWallet();
     setWalletAddress("");
     setBalance(null);
   };

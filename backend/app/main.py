@@ -90,6 +90,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Payment-Requirements", "PAYMENT-RESPONSE"],
 )
 
 # Register routers
