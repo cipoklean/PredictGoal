@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Match } from "../api";
 import { isPaymentConnected } from "../x402Client";
+import ConnectPayment from "../components/ConnectPayment";
 
 type PremiumInsight = Awaited<ReturnType<typeof api.getPremiumInsight>>;
 
@@ -33,6 +34,8 @@ export default function MatchDetailPage() {
   const [insight, setInsight] = useState<PremiumInsight | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
   const [insightError, setInsightError] = useState("");
+  // Bumps when the x402 payment wallet connects/disconnects, so isPaymentConnected() re-evaluates.
+  const [, bumpPayment] = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -216,18 +219,23 @@ export default function MatchDetailPage() {
             <p className="text-[#7b7f92] text-xs mb-4">
               Momentum, real form, head-to-head &amp; top scorers — pay-per-use via x402.
             </p>
-            <button
-              onClick={loadInsight}
-              disabled={loadingInsight}
-              className="bg-gradient-to-br from-[#533afd] to-[#7b6ff0] hover:from-[#4434d4] hover:to-[#6b5fe0] disabled:from-[#1e2140] disabled:to-[#1e2140] disabled:text-[#4d5063] text-white text-sm font-bold px-6 py-3 rounded-xl transition-all duration-200 active:scale-[0.97] shadow-[0_0_20px_rgba(83,58,253,0.25)] hover:shadow-[0_0_28px_rgba(83,58,253,0.4)]"
-            >
-              {loadingInsight ? "Unlocking..." : "⚡ Unlock Premium Insight — 3.0 USDC"}
-            </button>
+            {isPaymentConnected() ? (
+              <button
+                onClick={loadInsight}
+                disabled={loadingInsight}
+                className="bg-gradient-to-br from-[#533afd] to-[#7b6ff0] hover:from-[#4434d4] hover:to-[#6b5fe0] disabled:from-[#1e2140] disabled:to-[#1e2140] disabled:text-[#4d5063] text-white text-sm font-bold px-6 py-3 rounded-xl transition-all duration-200 active:scale-[0.97] shadow-[0_0_20px_rgba(83,58,253,0.25)] hover:shadow-[0_0_28px_rgba(83,58,253,0.4)]"
+              >
+                {loadingInsight ? "Unlocking..." : "⚡ Unlock Premium Insight — 3.0 USDC"}
+              </button>
+            ) : (
+              <ConnectPayment
+                label="⚡ Connect Payments to Unlock (3.0 USDC)"
+                hint="Connect MetaMask (Base Sepolia) to pay 3.0 USDC when you unlock. Connecting does not charge anything."
+                onConnected={() => bumpPayment((x) => x + 1)}
+              />
+            )}
             {insightError && (
               <p className="mt-3 text-[11px] text-[#ea2261] font-semibold">{insightError}</p>
-            )}
-            {!isPaymentConnected() && (
-              <p className="mt-3 text-[11px] text-[#7b7f92]">Connect ⚡ Payments (MetaMask, Base Sepolia) first.</p>
             )}
           </div>
         ) : (
@@ -286,6 +294,22 @@ export default function MatchDetailPage() {
         <div className="rounded-2xl border border-[rgba(83,58,253,0.1)] bg-[#11131f] p-5 sm:p-6">
           <h2 className="text-xs font-semibold text-[#7b7f92] uppercase tracking-widest mb-5">Place Prediction</h2>
 
+          {!isPaymentConnected() && (
+            <div className="mb-5 rounded-xl bg-[rgba(245,166,35,0.04)] border border-[rgba(245,166,35,0.12)] p-4">
+              <ConnectPayment
+                label="⚡ Connect Payments to Predict (2.0 USDC)"
+                hint="Connect MetaMask (Base Sepolia) to pay the 2.0 USDC platform fee when you place a prediction. Connecting does not charge anything."
+                onConnected={() => bumpPayment((x) => x + 1)}
+              />
+            </div>
+          )}
+          {isPaymentConnected() && (
+            <div className="mb-4 flex items-center gap-1.5 text-[11px]">
+              <span className="text-[#f5a623] font-bold">⚡ Payments connected</span>
+              <span className="text-[#7b7f92]">— 2.0 USDC fee is charged only when you Predict.</span>
+            </div>
+          )}
+
           {/* Outcome selector */}
           <div className="flex gap-2 mb-5">
             {([
@@ -322,7 +346,7 @@ export default function MatchDetailPage() {
             </div>
             <button
               onClick={placePrediction}
-              disabled={submitting || isNaN(parseFloat(stake)) || parseFloat(stake) <= 0}
+              disabled={submitting || !isPaymentConnected() || isNaN(parseFloat(stake)) || parseFloat(stake) <= 0}
               className="bg-gradient-to-br from-[#533afd] to-[#7b6ff0] hover:from-[#4434d4] hover:to-[#6b5fe0] disabled:from-[#1e2140] disabled:to-[#1e2140] disabled:text-[#4d5063] text-white text-sm font-bold px-6 rounded-xl transition-all duration-200 active:scale-[0.97] shadow-[0_0_20px_rgba(83,58,253,0.25)] hover:shadow-[0_0_28px_rgba(83,58,253,0.4)]"
             >
               {submitting ? "Placing..." : "Predict"}

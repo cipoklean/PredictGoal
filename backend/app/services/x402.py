@@ -106,6 +106,13 @@ async def verify_x402_payment(
 
     server = get_x402_server()
     if server is None:
+        if settings.APP_ENV == "production":
+            # Fail closed in production: never serve paid endpoints unenforced.
+            logger.error(
+                "x402 not configured in PRODUCTION — refusing %s without payment. "
+                "Set X402_PAYMENT_RECIPIENT.", path,
+            )
+            return False
         # x402 not configured -> dev-mode passthrough (no enforcement)
         logger.warning("x402 not configured — allowing payment for %s in dev mode", path)
         return True

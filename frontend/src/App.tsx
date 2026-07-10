@@ -62,7 +62,7 @@ function Navbar({
           )}
 
           <ConnectWallet address={walletAddress} onConnect={onConnect} onDisconnect={onDisconnect} />
-          <ConnectPayment onAddress={onConnect} />
+          <ConnectPayment showConnectButton={false} />
         </div>
       </div>
     </nav>

@@ -11,6 +11,7 @@ always knows which.
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 
 import httpx
@@ -40,6 +41,39 @@ _RECENT_TTL = 3600  # 1h
 
 _scorers_cache: tuple[datetime, list[dict]] | None = None
 _SCORERS_TTL = 3600  # 1h
+
+# Per-match insight cache — serves repeat requests with zero football-data calls.
+_INSIGHT_CACHE: dict[str, tuple[datetime, dict]] = {}
+_INSIGHT_TTL = 1800  # 30 min
+
+# Token-bucket rate limiter for football-data (free tier ~10 req/min).
+# Caps outbound calls so a burst of distinct matches can't trip HTTP 429.
+class _TokenBucket:
+    def __init__(self, capacity: float, refill_seconds: float) -> None:
+        self.capacity = float(capacity)
+        self.refill = refill_seconds
+        self.tokens = self.capacity
+        self.updated = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self) -> None:
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                self.tokens = min(
+                    self.capacity,
+                    self.tokens + (now - self.updated) * self.capacity / self.refill,
+                )
+                self.updated = now
+                if self.tokens >= 1:
+                    self.tokens -= 1
+                    return
+                deficit = 1 - self.tokens
+                wait = deficit * self.refill / self.capacity
+            await asyncio.sleep(wait)
+
+
+_fd_limiter = _TokenBucket(capacity=8, refill_seconds=60.0)
 
 
 class PremiumInsightResponse(BaseModel):
@@ -73,6 +107,7 @@ async def _fd_get(client: httpx.AsyncClient, path: str, params: dict | None = No
     (rate limit). Persistent failures raise and the caller falls back to the
     ELO estimate (reported as data_source="simulated").
     """
+    await _fd_limiter.acquire()
     last_exc: Exception | None = None
     for attempt in range(4):
         try:
@@ -334,6 +369,11 @@ async def get_premium_insight(request: Request, match_id: str):
     )
     home, away = match["home_team"], match["away_team"]
 
+    # Serve cached insight (zero football-data calls on repeat requests).
+    cached = _INSIGHT_CACHE.get(match_id)
+    if cached and (datetime.now(timezone.utc) - cached[0]).total_seconds() < _INSIGHT_TTL:
+        return PremiumInsightResponse(**cached[1])
+
     momentum: dict = {}
     form_analysis: dict = {}
     key_player_impact: dict = {}
@@ -394,7 +434,7 @@ async def get_premium_insight(request: Request, match_id: str):
         else "Simulated fallback (football-data unavailable) — ELO-based estimates only."
     )
 
-    return PremiumInsightResponse(
+    result = PremiumInsightResponse(
         match_id=match["match_id"],
         home_team=home,
         away_team=away,
@@ -407,3 +447,5 @@ async def get_premium_insight(request: Request, match_id: str):
         data_source=data_source,
         disclaimer=disclaimer,
     )
+    _INSIGHT_CACHE[match_id] = (datetime.now(timezone.utc), result.model_dump())
+    return result
