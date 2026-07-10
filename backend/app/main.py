@@ -25,8 +25,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize persistent store (balances + predictions survive restarts)
-store.init()
+# Initialize persistent store (balances + predictions survive restarts).
+# STORE_PATH points at the Render persistent disk in production; defaults to
+# backend/data/store.json for local dev.
+store.init(settings.STORE_PATH)
 
 # Rate limiting (optional — graceful fallback if slowapi not installed)
 try:

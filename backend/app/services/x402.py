@@ -96,8 +96,9 @@ async def verify_x402_payment(
     """
     Verify an x402 payment proof via the testnet facilitator.
 
-    Returns True if payment is valid or if x402 is unavailable (dev fallback).
-    In production: returns False for missing/invalid payments.
+    Enforcement is active ONLY when x402 is configured (X402_PAYMENT_RECIPIENT
+    set + SDK present). When x402 is not configured, this is a safe dev-mode
+    passthrough (returns True) so local/dev and unconfigured deploys still work.
     """
     required = X402_PRICING.get(path.rstrip("/"), 0.0)
     if required == 0:
@@ -105,12 +106,13 @@ async def verify_x402_payment(
 
     server = get_x402_server()
     if server is None:
-        logger.warning("x402 unavailable — allowing payment for %s in dev mode", path)
-        return True  # Dev mode fallback
+        # x402 not configured -> dev-mode passthrough (no enforcement)
+        logger.warning("x402 not configured — allowing payment for %s in dev mode", path)
+        return True
 
     if payment_header is None:
         logger.warning("x402 payment header missing for %s", path)
-        return True  # Dev mode fallback (change to False for production)
+        return False  # configured => enforce
 
     try:
         from x402 import ResourceConfig
@@ -129,13 +131,12 @@ async def verify_x402_payment(
         if result.is_valid:
             logger.info("x402 payment verified for %s: %s USDC", path, required)
             return True
-        else:
-            logger.warning("x402 payment INVALID for %s: %s", path, result.error or "unknown")
-            return True  # Dev mode fallback (change to False for production)
+        logger.warning("x402 payment INVALID for %s: %s", path, result.error or "unknown")
+        return False  # configured => enforce
 
     except Exception as e:
-        logger.error("x402 verification error for %s: %s — falling back to dev mode", path, e)
-        return True  # Dev mode fallback
+        logger.error("x402 verification error for %s: %s", path, e)
+        return False  # configured => enforce (fail closed)
 
 
 def load_config(payment_recipient: str):

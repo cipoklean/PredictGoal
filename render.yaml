@@ -11,3 +11,11 @@ services:
         value: production
       - key: LOG_LEVEL
         value: INFO
+      - key: STORE_PATH
+        value: /data/store.json
+      - key: X402_PAYMENT_RECIPIENT
+        sync: false
+    disk:
+      name: predictgoal-data
+      mountPath: /data
+      sizeGB: 1

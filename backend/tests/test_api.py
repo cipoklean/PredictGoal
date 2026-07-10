@@ -317,7 +317,7 @@ async def test_auto_settle_finished_match(monkeypatch):
     from app import store as store_module
     import uuid
 
-    match_id = "WC2026-AUTOTEST"
+    match_id = f"WC2026-AUTOTEST-{uuid.uuid4().hex[:8]}"
     pred_id = str(uuid.uuid4())
     record = {
         "prediction_id": pred_id,

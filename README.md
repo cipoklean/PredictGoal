@@ -3,7 +3,7 @@
 **Hackathon:** The Injective Global Cup (Jul 3–19, 2026)
 **Built with:** x402, CCTP, MCP Server, Agent Skills
 **Live:** [predictgoal.onrender.com](https://predictgoal.onrender.com) (backend) | Vercel (frontend)
-**Tests:** 29 passing (23 backend + 6 MCP)
+**Tests:** 30 passing (24 backend + 6 MCP)
 
 A non-custodial, micro-stakes prediction market for World Cup 2026 matches with real-time AI-powered win probabilities — built on Injective's newest technologies. **Testnet only. Zero real funds.**
 
@@ -27,7 +27,7 @@ World Cup fans can:
 
 ### 🔐 x402 — Pay-per-Use Prediction + Premium Insights
 
-Every prediction (`POST /api/predictions`) and premium insight (`GET /api/insights/{match_id}`) requires an **x402 payment proof** header. The backend validates the payment on Injective testnet before accepting the request.
+Every prediction (`POST /api/predictions`) and premium insight (`GET /api/insights/{match_id}`) accepts an **x402 payment proof** header and validates it via the x402.org facilitator. Enforcement is active only when `X402_PAYMENT_RECIPIENT` is configured; otherwise it is a dev-mode passthrough. (The frontend does not yet generate proofs, so enforcement stays dormant until that is added.)
 
 | Endpoint | Price | Status |
 |----------|-------|--------|
@@ -86,11 +86,11 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 | Leaderboard | **Live** | Server-computed, all predictions tracked |
 | Settlement | **Live** | Auto-settles finished matches from the football-data feed (background sweeper, idempotent + reentrancy-safe); also admin-key gated manual endpoint; credits winners |
 | x402 fee deduction | **Live** | 2 USDC deducted from balance per prediction |
-| Premium insights | **x402-gated** | Real payment verification via x402.org facilitator (Base Sepolia). Insight *content* (momentum, form, key-player) is **simulated** from the ELO model — not real match data |
+| Premium insights | **x402-gated** | Payment proof validated via x402.org facilitator when `X402_PAYMENT_RECIPIENT` is set; dev-mode passthrough otherwise. Insight *content* (momentum, form, key-player) is **simulated** from the ELO model — not real match data |
 | CCTP deposit/withdraw | **Stubbed** | Returns success with mock tx hash; real testnet CCTP requires Injective-side Circle support |
 | MCP Server settlement | **Live** | Local stdio only, not connected to backend |
 | Agent Skills package | **Live** | Drop-in module, works standalone |
-| Persistent storage | **Live** | JSON file-backed store survives Render restarts |
+| Persistent storage | **Live** | JSON file-backed store on an attached Render persistent disk (`/data`, via `STORE_PATH`); survives deploys. Local dev uses `backend/data/` (gitignored) |
 | Health check endpoint | **Live** | GET + HEAD at /health, toggle with HEALTH_CHECK_ENABLED |
 
 ---
@@ -130,7 +130,7 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 - **Balance locking** — thread-safe read-modify-write on all credit/debit operations
 - **Kickoff cutoff** — server-side enforcement (no post-kickoff/live predictions)
 - **Match ID validation** — checked against real match data, not trusted from request
-- **Settlement auth** — admin key **required** (rejects if not configured)
+- **Settlement auth** — the manual settlement endpoint requires the admin key (rejects if not configured); automatic settlement is a server-internal trusted process (no key needed)
 - **Idempotent settlement** — calling twice returns "already_settled"
 - **Reentrancy-safe** — per-match asyncio.Lock prevents double-payouts
 - **Winning balances credited** — settlement auto-credits winners with 2x payout
@@ -155,7 +155,7 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 cd backend
 cp .env.example .env
 # Edit .env with your FOOTBALL_DATA_API_KEY (or leave blank for placeholder data)
-# Set ADMIN_SETTLE_KEY for settlement (required)
+# Set ADMIN_SETTLE_KEY for the manual settlement endpoint (recommended; admin-key gated)
 uv sync
 uv run uvicorn app.main:app --reload --port 8000
 ```
@@ -194,7 +194,7 @@ cd mcp-server && uv run python demo_odds.py Spain Belgium
 
 ### Run all tests
 ```bash
-cd backend && uv run pytest tests/ -v    # 23 tests
+cd backend && uv run pytest tests/ -v    # 24 tests
 cd mcp-server && uv run pytest tests/ -v  # 6 tests
 ```
 

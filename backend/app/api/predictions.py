@@ -111,10 +111,15 @@ async def place_prediction(request: Request, body: PredictionCreate):
     # Validate match exists and is still open for predictions
     match = await _validate_match_for_prediction(body.match_id)
 
-    # x402 payment check (stubbed in dev; real verification in Phase 2)
+    # x402 payment verification — enforced when X402_PAYMENT_RECIPIENT is
+    # configured (see app/services/x402.py); dev-mode passthrough otherwise.
     payment_header = request.headers.get("X-402-Payment")
-    if payment_header is None:
-        logger.warning("x402 payment missing for user=%s — allowing in dev mode", user_address)
+    payment_valid = await x402_service.verify_x402_payment(payment_header, "/api/predictions")
+    if not payment_valid:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Payment required. Send an x402 payment proof in the X-402-Payment header (2.0 USDC).",
+        )
 
     # Validate stake bounds
     if body.stake_usdc <= 0:

@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     AUTO_SETTLE_ENABLED: bool = True
     AUTO_SETTLE_INTERVAL_SECONDS: int = 60
 
+    # Store path — where the JSON store is written.
+    # On Render this points at the mounted persistent disk (/data/store.json).
+    # If unset, defaults to backend/data/store.json (local dev, gitignored).
+    STORE_PATH: str | None = None
+
     # World Cup Data
     FOOTBALL_DATA_API_KEY: str = ""
     FOOTBALL_DATA_COMPETITION_CODE: str = "WC"
