@@ -1,13 +1,15 @@
 """
-x402 payment verification — real Injective EVM testnet micropayments.
+x402 payment verification — Injective EVM testnet micropayments.
 
-Uses the x402.org facilitator (free, testnet-only) to verify
-payments made in USDC on EVM-compatible chains.
-
-For the hackathon: payments are settled on the Injective EVM testnet
-(chain ID 888, eip155:888). Users connect MetaMask with the Injective
-EVM testnet network added, so the 2/3 USDC fee is paid "on Injective".
-The facilitator is free — no API key needed.
+The 402 payment flow (requirements envelope, USDC pricing, Injective EVM
+testnet chain eip155:1439) is fully wired. Enforcement is controlled by
+X402_MODE:
+  * "passthrough" (default, hackathon demo): paid endpoints are served
+    WITHOUT requiring a real on-chain payment. No hosted x402 facilitator
+    exists for Injective, so this is the correct mode for the testnet demo —
+    zero real funds move, but the x402 contract is defined and visible.
+  * "enforce": a valid x402 payment proof is required (needs a working
+    facilitator + supported chain). Fail-closed if x402 cannot initialize.
 """
 
 import logging
@@ -35,11 +37,13 @@ X402_PRICING: dict[str, float] = {
 X402_PAYMENT_RECIPIENT: str = ""
 X402_PROTOCOL_FEE_BPS: int = 50
 
-# Network: Injective EVM testnet (chain ID 888). Users add the Injective EVM
-# testnet network to MetaMask and pay the fee there, so predictions are settled
-# "on Injective". X402_PAYMENT_RECIPIENT must be an EVM (0x) address on this
-# chain — i.e. your Injective EVM address, not the inj1 Cosmos address.
-X402_NETWORK = "eip155:888"  # Injective EVM testnet
+# Network: Injective EVM testnet (EVM chain id 1439). Users add the
+# Injective EVM testnet network to MetaMask (chain 1439) and would pay the
+# fee there, so predictions are settled "on Injective". X402_PAYMENT_RECIPIENT
+# must be an EVM (0x) address on this chain — i.e. your Injective EVM
+# address, not the inj1 Cosmos address. (888 is the Injective *Cosmos* testnet
+# id; 1439 is the EVM chain id this dApp uses.)
+X402_NETWORK = "eip155:1439"  # Injective EVM testnet (real EVM chain id)
 
 # x402 server instance (lazy init)
 _x402_server: Optional[object] = None
@@ -58,11 +62,26 @@ def is_x402_available() -> bool:
 
 
 def get_x402_server():
-    """Initialize and return the x402 server (singleton)."""
+    """Initialize and return the x402 server (singleton).
+
+    Returns None (no enforcement) unless X402_MODE == "enforce". In the
+    default "passthrough" mode the demo serves paid endpoints without a real
+    on-chain payment — there is no hosted x402 facilitator for Injective, and
+    zero real funds move. Flip X402_MODE to "enforce" only when a working
+    facilitator + supported chain are configured.
+    """
     global _x402_server, _x402_initialized
 
     if _x402_initialized:
         return _x402_server
+
+    if settings.X402_MODE != "enforce":
+        logger.info(
+            "x402 mode=%s — server not initialized (no enforcement)",
+            settings.X402_MODE,
+        )
+        _x402_initialized = True
+        return None
 
     if not is_x402_available():
         logger.warning("x402 SDK not installed — payment verification disabled")
@@ -227,3 +246,8 @@ def load_config(payment_recipient: str):
     """Load x402 config from env — call once at startup."""
     global X402_PAYMENT_RECIPIENT
     X402_PAYMENT_RECIPIENT = payment_recipient.strip()
+
+
+def get_x402_mode() -> str:
+    """Return the active x402 mode ("passthrough" | "enforce")."""
+    return settings.X402_MODE

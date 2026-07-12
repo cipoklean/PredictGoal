@@ -118,6 +118,7 @@ export const api = {
       form_analysis: Record<string, unknown>;
       key_player_impact: Record<string, unknown>;
       data_source: string;
+      x402_mode: string;
       disclaimer: string;
     }>(`/insights/${id}`),
 

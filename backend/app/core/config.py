@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     # x402
     X402_PAYMENT_RECIPIENT: str = ""
     X402_PROTOCOL_FEE_BPS: int = 50
+    # x402 enforcement mode.
+    #   "passthrough" (default): serve paid endpoints WITHOUT requiring payment.
+    #       Used for the hackathon demo on the Injective EVM testnet (chain 1439)
+    #       where no hosted x402 facilitator exists -- the 402 flow is fully
+    #       wired but not enforced, so zero real funds move.
+    #   "enforce": require a valid x402 payment proof (needs a working
+    #       facilitator + supported chain). Fail-closed if x402 cannot init.
+    X402_MODE: str = "passthrough"
 
     # Admin — required for settlement. No default (must be set in env).
     ADMIN_SETTLE_KEY: str = ""

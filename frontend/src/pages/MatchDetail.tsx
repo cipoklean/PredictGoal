@@ -34,6 +34,8 @@ export default function MatchDetailPage() {
   const [insight, setInsight] = useState<PremiumInsight | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
   const [insightError, setInsightError] = useState("");
+  // x402 dev-mode note shown briefly while "unlocking" (passthrough demo).
+  const [x402Note, setX402Note] = useState("");
   // Bumps when the x402 payment wallet connects/disconnects, so isPaymentConnected() re-evaluates.
   const [, bumpPayment] = useState(0);
 
@@ -64,12 +66,16 @@ export default function MatchDetailPage() {
   const loadInsight = async () => {
     if (!id) return;
     setLoadingInsight(true); setInsightError("");
+    // Clearly-labeled x402 dev-mode pause so the pay-per-use flow is visible.
+    // In passthrough (hackathon demo) no real USDC is charged.
+    setX402Note("⚡ x402 · dev mode — 3.0 USDC on Injective EVM testnet (no real charge)");
     try {
+      await new Promise((r) => setTimeout(r, 900));
       const data = await api.getPremiumInsight(id);
       setInsight(data);
     } catch (e: unknown) {
       setInsightError(e instanceof Error ? e.message : "Failed to load insight");
-    } finally { setLoadingInsight(false); }
+    } finally { setLoadingInsight(false); setX402Note(""); }
   };
 
   if (loading) return (
@@ -234,10 +240,18 @@ export default function MatchDetailPage() {
                 onConnected={() => bumpPayment((x) => x + 1)}
               />
             )}
+            {x402Note && (
+              <p className="mt-3 text-[11px] text-[#a89ffa] font-medium flex items-center justify-center gap-1.5">
+                <span className="animate-pulse">⚡</span>{x402Note}
+              </p>
+            )}
             {insightError && (
               <p className="mt-3 text-[11px] text-[#ea2261] font-semibold">{insightError}</p>
             )}
-          </div>
+            <p className="mt-3 text-[10px] text-[#4d5063]">
+              x402 pay-per-use · dev-mode passthrough (zero real funds)
+            </p>
+            </div>
         ) : (
           <div className="space-y-5 animate-fade-in-up">
             <div>
@@ -278,6 +292,10 @@ export default function MatchDetailPage() {
             </div>
 
             <p className="text-[10px] text-[#4d5063] leading-relaxed">{insight.disclaimer}</p>
+
+            <div className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[rgba(83,58,253,0.1)] text-[#a89ffa] border border-[rgba(83,58,253,0.2)]">
+              <span>⚡</span> x402 {insight.x402_mode === "enforce" ? "· live payment" : "· dev-mode passthrough — no charge"}
+            </div>
 
             <button
               onClick={() => { setInsight(null); setInsightError(""); }}

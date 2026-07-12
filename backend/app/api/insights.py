@@ -23,7 +23,7 @@ from app.services.worldcup import fetch_upcoming_matches
 from app.services.analytics import calculate_win_probabilities
 import json
 
-from app.services.x402 import verify_x402_payment, X402_PRICING, build_requirements
+from app.services.x402 import verify_x402_payment, X402_PRICING, build_requirements, get_x402_mode
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/insights", tags=["insights"])
@@ -91,6 +91,7 @@ class PremiumInsightResponse(BaseModel):
         "Real form, head-to-head and top scorers from football-data.org. "
         "Win probabilities from ELO model."
     )
+    x402_mode: str = "passthrough"  # "passthrough" | "enforce" (see app.services.x402)
 
     model_config = {"extra": "forbid"}
 
@@ -334,7 +335,9 @@ async def get_premium_insight(request: Request, match_id: str):
     """
     Get premium AI-powered match insight.
 
-    Requires x402 payment proof (3.0 USDC per insight on testnet).
+    x402 pay-per-use (3.0 USDC) is wired on the Injective EVM testnet
+    (chain 1439). In the default "passthrough" mode no real payment is
+    required, so the insight is served directly (zero real funds).
     Form, head-to-head, momentum and top scorers are pulled live from
     football-data.org when available; otherwise an ELO-based estimate is used.
     """
@@ -446,6 +449,7 @@ async def get_premium_insight(request: Request, match_id: str):
         key_player_impact=key_player_impact,
         data_source=data_source,
         disclaimer=disclaimer,
+        x402_mode=get_x402_mode(),
     )
     _INSIGHT_CACHE[match_id] = (datetime.now(timezone.utc), result.model_dump())
     return result

@@ -27,19 +27,19 @@ World Cup fans can:
 
 ### 🔐 x402 — Pay-per-Use Prediction + Premium Insights
 
-Every prediction (`POST /api/predictions`) and premium insight (`GET /api/insights/{match_id}`) accepts an **x402 payment proof** header and validates it via the x402.org facilitator. Enforcement is active only when `X402_PAYMENT_RECIPIENT` is configured; otherwise it is a dev-mode passthrough.
+Every prediction (`POST /api/predictions`) and premium insight (`GET /api/insights/{match_id}`) is wired for an **x402 payment proof** (2.0 / 3.0 USDC) on the Injective EVM testnet (chain 1439). Enforcement is controlled by `X402_MODE` — it defaults to **`passthrough`** for the hackathon demo, so no real on-chain fee is charged (zero real funds). In passthrough the client still shows a clearly-labeled **"x402 · dev-mode passthrough — no charge"** state when you unlock, so the pay-per-use flow is visible.
 
-**Frontend is wired with a single wallet:** the **Connect Wallet** button connects MetaMask, which is simultaneously the user's **account identity** (where bets & balance are stored) and the **x402 payer** that signs the fee. The browser client (`src/x402Client.ts`) is pinned to the **Injective EVM testnet (chain 888)** and wraps `fetch` with `@x402/fetch`'s `wrapFetchWithPaymentFromConfig` + `@x402/evm`'s `ExactEvmScheme`. Every API call routes through that wrapped fetch once the wallet is connected, so a `POST /api/predictions` (or `GET /api/insights/{id}`) automatically signs a 2.0 / 3.0 USDC payment proof and retries on the `402`. The backend responds with the v2 `X-Payment-Requirements` envelope (CORS-exposed), which the client parses and pays.
+**Frontend is wired with a single wallet:** the **Connect Wallet** button connects MetaMask, which is simultaneously the user's **account identity** (where bets & balance are stored) and the **x402 payer** that signs the fee. The browser client (`src/x402Client.ts`) is pinned to the **Injective EVM testnet (chain 1439)** — note `888` is the Injective *Cosmos* testnet id; `1439` is the EVM chain id the dApp uses — and wraps `fetch` with `@x402/fetch`'s `wrapFetchWithPaymentFromConfig` + `@x402/evm`'s `ExactEvmScheme`. Every API call routes through that wrapped fetch once the wallet is connected, so a `POST /api/predictions` (or `GET /api/insights/{id}`) automatically signs a 2.0 / 3.0 USDC payment proof and retries on the `402`. The backend responds with the v2 `X-Payment-Requirements` envelope (CORS-exposed), which the client parses and pays.
 
 | Endpoint | Price | Status |
 |----------|-------|--------|
-| `POST /api/predictions` | 2.0 USDC | **Live** — frontend signs proof via MetaMask (x402.org facilitator, Injective EVM testnet chain 888) |
-| `GET /api/insights/{id}` | 3.0 USDC | **Live** — backend enforces; surfaced in Match Detail "Premium Insights" panel (MetaMask x402 pay) |
+| `POST /api/predictions` | 2.0 USDC | **Wired** — frontend signs proof via MetaMask (Injective EVM testnet chain 1439); enforced when `X402_MODE=enforce` |
+| `GET /api/insights/{id}` | 3.0 USDC | **Wired** — x402 flow surfaced in Match Detail "Premium Insights" panel; dev-mode passthrough in the demo |
 | `POST /api/wallet/withdraw` | 0.5 USDC | Stubbed |
 
-**Implementation:** `backend/app/services/x402.py` — uses the `x402[fastapi,evm]` Python SDK with the free x402.org facilitator for testnet payment verification (network `eip155:888`, Injective EVM testnet). Falls back to dev-mode passthrough when no payment recipient is configured. Frontend: `src/x402Client.ts` (pinned to Injective EVM chain 888), `src/api.ts` (`getPaymentFetch()`), `src/components/ConnectPayment.tsx` (the single wallet button).
+**Implementation:** `backend/app/services/x402.py` — uses the `x402[fastapi,evm]` Python SDK for the x402 v2 payment flow (network `eip155:1439`, Injective EVM testnet). `X402_MODE` (default `passthrough`) controls enforcement; flip to `enforce` only with a working facilitator + supported chain. Frontend: `src/x402Client.ts` (pinned to Injective EVM chain 1439), `src/api.ts` (`getPaymentFetch()`), `src/components/ConnectPayment.tsx` (the single wallet button).
 
-**Config (production):** `X402_NETWORK` is `eip155:888` (Injective EVM testnet) in `backend/app/services/x402.py`. Set `X402_PAYMENT_RECIPIENT` to your Injective EVM `0x` address (the one MetaMask shows after adding the Injective EVM testnet), **not** the `inj1` Cosmos address. **Important:** the free x402.org facilitator does **not** support the Injective EVM testnet, so with `eip155:888` the backend detects the unsupported scheme and falls back to **dev-mode passthrough** — the in-app USDC balance is still debited per prediction, but no real on-chain fee is charged. Real x402 enforcement on Injective would require a facilitator that supports chain 888. Leave the recipient unset to force dev-mode passthrough explicitly.
+**Config (production):** `X402_NETWORK` is `eip155:1439` (Injective EVM testnet — the real EVM chain id; `888` is the Injective *Cosmos* testnet id) in `backend/app/services/x402.py`, and `X402_MODE` defaults to `passthrough`. Set `X402_PAYMENT_RECIPIENT` to your Injective EVM `0x` address (the one MetaMask shows after adding the Injective EVM testnet), **not** the `inj1` Cosmos address. **Important:** no hosted x402 facilitator exists for Injective, so `X402_MODE=passthrough` is correct for the demo — the in-app USDC balance is still debited per prediction, but no real on-chain fee is charged (zero real funds). The client surfaces a clearly-labeled **"x402 · dev-mode passthrough — no charge"** state on unlock. Real x402 enforcement on Injective would require a self-hosted facilitator that supports chain 1439. Leave `X402_MODE=passthrough` (default) for the demo.
 
 ### 🌉 CCTP — Cross-Chain USDC Transfers
 
@@ -90,7 +90,7 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 | Leaderboard | **Live** | Server-computed, all predictions tracked |
 | Settlement | **Live** | Auto-settles finished matches from the football-data feed (background sweeper, idempotent + reentrancy-safe); also admin-key gated manual endpoint; credits winners |
 | x402 fee deduction | **Live** | 2 USDC deducted from balance per prediction |
-| Premium insights | **x402-gated** | On Injective EVM (chain 888) the x402.org facilitator is unsupported, so this runs in dev-mode passthrough (no real on-chain fee; in-app USDC balance still debited per prediction). Insight *content* (momentum, form, key-player) is **simulated** from the ELO model — not real match data |
+| Premium insights | **x402-gated (dev-mode passthrough)** | x402 pay-per-use (3.0 USDC) is fully wired on Injective EVM testnet (chain 1439), but `X402_MODE=passthrough` means no real on-chain fee is charged (in-app USDC balance still debited per prediction). The client shows a labeled "x402 · dev-mode passthrough" state on unlock. Insight *content* (momentum, form, key-player) is **simulated** from the ELO model — not real match data |
 | CCTP deposit/withdraw | **Stubbed** | Returns success with mock tx hash; real testnet CCTP requires Injective-side Circle support |
 | MCP Server settlement | **Live** | Local stdio only, not connected to backend |
 | Agent Skills package | **Live** | Drop-in module, works standalone |
@@ -182,7 +182,7 @@ npm run dev
 
 Open http://localhost:5173
 
-> **Wallet setup:** PredictGoal uses a single MetaMask wallet as both your account and the x402 fee payer. Add the **Injective EVM testnet** to MetaMask before connecting: Network Name `Injective EVM Testnet`, RPC URL `https://testnet.evm.injective.network`, Chain ID `888`, Currency `INJ`. The 2 / 3 USDC fee is paid there.
+> **Wallet setup:** PredictGoal uses a single MetaMask wallet as both your account and the x402 fee payer. Add the **Injective EVM Testnet** to MetaMask before connecting: Network Name `Injective EVM Testnet`, RPC URL `https://k8s.testnet.json-rpc.injective.network`, Chain ID `1439` (the EVM chain id — note `888` is the Injective *Cosmos* testnet id), Currency `INJ`. The 2 / 3 USDC fee would be paid there (in the demo it runs in x402 dev-mode passthrough, so nothing is actually charged).
 
 ### Agent Skills
 ```bash
@@ -213,7 +213,7 @@ cd mcp-server && uv run pytest tests/ -v  # 6 tests
 | GET | `/api/matches` | List all matches | — | Free |
 | GET | `/api/matches/{id}` | Match detail | — | Free |
 | GET | `/api/matches/{id}/analytics` | Win probabilities | — | Free |
-| GET | `/api/insights/{id}` | Premium AI insight | x402 | 0.5 USDC |
+| GET | `/api/insights/{id}` | Premium AI insight | x402 | 3.0 USDC |
 | POST | `/api/predictions` | Place prediction | Wallet addr | 2.0 USDC |
 | GET | `/api/predictions/me` | My predictions | Wallet addr | Free |
 | GET | `/api/predictions/leaderboard` | Leaderboard (all predictions) | — | Free |
