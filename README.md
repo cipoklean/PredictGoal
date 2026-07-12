@@ -39,7 +39,7 @@ Every prediction (`POST /api/predictions`) and premium insight (`GET /api/insigh
 
 **Implementation:** `backend/app/services/x402.py` — uses the `x402[fastapi,evm]` Python SDK with the free x402.org facilitator for testnet payment verification (network `eip155:888`, Injective EVM testnet). Falls back to dev-mode passthrough when no payment recipient is configured. Frontend: `src/x402Client.ts` (pinned to Injective EVM chain 888), `src/api.ts` (`getPaymentFetch()`), `src/components/ConnectPayment.tsx` (the single wallet button).
 
-**Config (production):** set `X402_PAYMENT_RECIPIENT` to a real **Injective EVM** (`eip155:888`) address — your Injective EVM `0x` address (the one MetaMask shows after you add the Injective EVM testnet), **not** the `inj1` Cosmos address. The signed payment settles to that address on the Injective EVM testnet. `X402_NETWORK` is already `eip155:888` in `backend/app/services/x402.py`. The facilitator is `https://x402.org/facilitator` (testnet) — confirm it supports chain 888 before relying on real on-chain enforcement; otherwise leave the recipient unset for dev-mode passthrough.
+**Config (production):** `X402_NETWORK` is `eip155:888` (Injective EVM testnet) in `backend/app/services/x402.py`. Set `X402_PAYMENT_RECIPIENT` to your Injective EVM `0x` address (the one MetaMask shows after adding the Injective EVM testnet), **not** the `inj1` Cosmos address. **Important:** the free x402.org facilitator does **not** support the Injective EVM testnet, so with `eip155:888` the backend detects the unsupported scheme and falls back to **dev-mode passthrough** — the in-app USDC balance is still debited per prediction, but no real on-chain fee is charged. Real x402 enforcement on Injective would require a facilitator that supports chain 888. Leave the recipient unset to force dev-mode passthrough explicitly.
 
 ### 🌉 CCTP — Cross-Chain USDC Transfers
 
@@ -90,7 +90,7 @@ AI agents can call `calculate_win_probabilities(home_team, away_team, ...)` to g
 | Leaderboard | **Live** | Server-computed, all predictions tracked |
 | Settlement | **Live** | Auto-settles finished matches from the football-data feed (background sweeper, idempotent + reentrancy-safe); also admin-key gated manual endpoint; credits winners |
 | x402 fee deduction | **Live** | 2 USDC deducted from balance per prediction |
-| Premium insights | **x402-gated** | Payment proof validated via x402.org facilitator when `X402_PAYMENT_RECIPIENT` is set; dev-mode passthrough otherwise. Insight *content* (momentum, form, key-player) is **simulated** from the ELO model — not real match data |
+| Premium insights | **x402-gated** | On Injective EVM (chain 888) the x402.org facilitator is unsupported, so this runs in dev-mode passthrough (no real on-chain fee; in-app USDC balance still debited per prediction). Insight *content* (momentum, form, key-player) is **simulated** from the ELO model — not real match data |
 | CCTP deposit/withdraw | **Stubbed** | Returns success with mock tx hash; real testnet CCTP requires Injective-side Circle support |
 | MCP Server settlement | **Live** | Local stdio only, not connected to backend |
 | Agent Skills package | **Live** | Drop-in module, works standalone |

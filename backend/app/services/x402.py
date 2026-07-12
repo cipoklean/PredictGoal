@@ -85,6 +85,19 @@ def get_x402_server():
         server.register(X402_NETWORK, ExactEvmServerScheme())
         server.initialize()
 
+        # Self-test: the x402 SDK only ships 'exact' schemes for known EVM
+        # chains. Unknown chains (e.g. Injective EVM eip155:888) raise
+        # SchemeNotFoundError when building requirements, so probe it here
+        # and fall back to dev-mode passthrough instead of 500-ing per request.
+        server.build_payment_requirements(
+            ResourceConfig(
+                scheme="exact",
+                network=X402_NETWORK,
+                pay_to=X402_PAYMENT_RECIPIENT,
+                price="$0.01",
+            )
+        )
+
         logger.info(
             "x402 server initialized — network=%s, recipient=%s, facilitator=%s",
             X402_NETWORK, X402_PAYMENT_RECIPIENT[:10], X402_FACILITATOR_URL,
@@ -180,18 +193,22 @@ async def build_requirements(path: str) -> Optional[dict]:
         pay_to=X402_PAYMENT_RECIPIENT,
         price=f"${required:.2f}",
     )
-    reqs = server.build_payment_requirements(config)
-    # The v2 envelope schema the JS client (@x402/fetch) parses via its
-    # PaymentRequiredSchema requires a non-null `resource`. The Python SDK
-    # serializes every optional field as explicit `null` (e.g. error:null,
-    # resource.mimeType:null). zod's `.optional()` accepts a MISSING
-    # field but REJECTS explicit `null`, so those would fail client-side
-    # parsing. We strip all nulls so optional fields are simply absent.
-    # create_payment_required_response is async on x402ResourceServer.
-    envelope = await server.create_payment_required_response(
-        reqs,
-        resource={"url": path},
-    )
+    try:
+        reqs = server.build_payment_requirements(config)
+        # The v2 envelope schema the JS client (@x402/fetch) parses via its
+        # PaymentRequiredSchema requires a non-null `resource`. The Python SDK
+        # serializes every optional field as explicit `null` (e.g. error:null,
+        # resource.mimeType:null). zod's `.optional()` accepts a MISSING
+        # field but REJECTS explicit `null`, so those would fail client-side
+        # parsing. We strip all nulls so optional fields are simply absent.
+        # create_payment_required_response is async on x402ResourceServer.
+        envelope = await server.create_payment_required_response(
+            reqs,
+            resource={"url": path},
+        )
+    except Exception as e:
+        logger.error("x402 build_requirements failed for %s: %s", path, e)
+        return None
     return _strip_nulls(envelope.model_dump(mode="json"))
 
 
