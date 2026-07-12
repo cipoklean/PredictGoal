@@ -116,11 +116,14 @@ async def verify_x402_payment(
     path: str,
 ) -> bool:
     """
-    Verify an x402 payment proof via the testnet facilitator.
+    Verify an x402 payment proof via the facilitator.
 
-    Enforcement is active ONLY when x402 is configured (X402_PAYMENT_RECIPIENT
-    set + SDK present). When x402 is not configured, this is a safe dev-mode
-    passthrough (returns True) so local/dev and unconfigured deploys still work.
+    Enforcement is active ONLY when x402 actually initializes a server (real
+    facilitator + supported chain). When x402 is not usable -- missing recipient,
+    unsupported chain (e.g. Injective EVM eip155:888), or SDK absent -- this
+    falls back to passthrough (returns True) in ALL environments so the demo
+    keeps working. On-chain x402 is wired but runs in dev-mode passthrough for
+    the Injective EVM testnet (zero real funds).
     """
     required = X402_PRICING.get(path.rstrip("/"), 0.0)
     if required == 0:
@@ -128,16 +131,14 @@ async def verify_x402_payment(
 
     server = get_x402_server()
     if server is None:
-        app_env = settings.APP_ENV if settings is not None else "development"
-        if app_env == "production":
-            # Fail closed in production: never serve paid endpoints unenforced.
-            logger.error(
-                "x402 not configured in PRODUCTION — refusing %s without payment. "
-                "Set X402_PAYMENT_RECIPIENT.", path,
-            )
-            return False
-        # x402 not configured -> dev-mode passthrough (no enforcement)
-        logger.warning("x402 not configured — allowing payment for %s in dev mode", path)
+        # x402 is not usable (missing recipient, unsupported chain such as
+        # Injective EVM eip155:888, or SDK absent). Fall back to passthrough in
+        # ALL environments so the demo keeps working -- enforcement only kicks
+        # in when a server actually initializes (real facilitator + supported
+        # chain). This is the intended dev-mode passthrough for the hackathon.
+        logger.warning(
+            "x402 unavailable — serving %s in passthrough (no enforcement)", path
+        )
         return True
 
     if payment_header is None:
