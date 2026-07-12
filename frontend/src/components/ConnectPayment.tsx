@@ -17,15 +17,15 @@ interface Props {
 
 // MetaMask connect button that enables x402 payment signing for predictions/insights.
 //
-// IMPORTANT: this is SEPARATE from the app identity ("Set Address"). Connecting here
-// does NOT change who you are in the app, and connecting never charges anything — a
-// payment only happens when you actually click Predict / Unlock and approve the
-// MetaMask prompt.
+// This IS the app identity: connecting here sets the user's account (where bets and
+// balance live) AND enables fee signing. Connecting never charges anything — a payment
+// only happens when you actually click Predict / Unlock and approve the MetaMask prompt.
 export default function ConnectPayment({
   showConnectButton = true,
   label,
   hint,
   onConnected,
+  onAccountSet,
 }: Props) {
   const [connected, setConnected] = useState(false);
   const [addr, setAddr] = useState("");
