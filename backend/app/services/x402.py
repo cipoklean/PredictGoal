@@ -13,7 +13,12 @@ The facilitator is free — no API key needed.
 import logging
 from typing import Optional
 
+from app.core.config import get_settings
+
 logger = logging.getLogger(__name__)
+
+# App settings — used only for the APP_ENV production fail-closed check below.
+settings = get_settings()
 
 # x402 facilitator URL (free, testnet-only, no API key needed)
 X402_FACILITATOR_URL = "https://x402.org/facilitator"
@@ -110,7 +115,8 @@ async def verify_x402_payment(
 
     server = get_x402_server()
     if server is None:
-        if settings.APP_ENV == "production":
+        app_env = settings.APP_ENV if settings is not None else "development"
+        if app_env == "production":
             # Fail closed in production: never serve paid endpoints unenforced.
             logger.error(
                 "x402 not configured in PRODUCTION — refusing %s without payment. "
