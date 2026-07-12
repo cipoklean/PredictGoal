@@ -14,7 +14,7 @@ A non-custodial, micro-stakes prediction market for World Cup 2026 matches with 
 World Cup fans can:
 - Browse **World Cup 2026 matches** with real data from football-data.org (104 matches when API key is set; 4 demo placeholder matches otherwise)
 - View **AI-generated win probabilities** (Home/Draw/Away) via ELO + Poisson scoreline simulation
-- Place **micro-stake predictions** (1–100 USDC stake + 2 USDC x402 fee) via Injective x402 pay-per-use
+- Place **micro-stake predictions** (1–100 USDC stake + 2 USDC x402 fee) via Injective x402 pay-per-use — a single MetaMask connection is both your **account** and the **fee payer** (no separate address to type)
 - Get **premium AI insights** — momentum, form analysis, key player impact (x402-gated)
 - Compete on a global **leaderboard** (all predictions tracked, ranked by total won)
 - Deposit and withdraw testnet USDC via **CCTP** cross-chain bridge (stubbed)
@@ -29,17 +29,17 @@ World Cup fans can:
 
 Every prediction (`POST /api/predictions`) and premium insight (`GET /api/insights/{match_id}`) accepts an **x402 payment proof** header and validates it via the x402.org facilitator. Enforcement is active only when `X402_PAYMENT_RECIPIENT` is configured; otherwise it is a dev-mode passthrough.
 
-**Frontend is wired:** the browser client (`src/x402Client.ts`) connects MetaMask (Base Sepolia) and wraps `fetch` with `@x402/fetch`'s `wrapFetchWithPaymentFromConfig` + `@x402/evm`'s `ExactEvmScheme`. Every API call routes through that wrapped fetch once "⚡ Connect Payments" is clicked, so a `POST /api/predictions` (or `GET /api/insights/{id}`) automatically signs a 2.0 / 0.5 USDC USDC payment proof and retries on the `402`. The backend responds with the v2 `X-Payment-Requirements` envelope (CORS-exposed), which the client parses and pays.
+**Frontend is wired with a single wallet:** the **Connect Wallet** button connects MetaMask, which is simultaneously the user's **account identity** (where bets & balance are stored) and the **x402 payer** that signs the fee. The browser client (`src/x402Client.ts`) is pinned to the **Injective EVM testnet (chain 888)** and wraps `fetch` with `@x402/fetch`'s `wrapFetchWithPaymentFromConfig` + `@x402/evm`'s `ExactEvmScheme`. Every API call routes through that wrapped fetch once the wallet is connected, so a `POST /api/predictions` (or `GET /api/insights/{id}`) automatically signs a 2.0 / 3.0 USDC payment proof and retries on the `402`. The backend responds with the v2 `X-Payment-Requirements` envelope (CORS-exposed), which the client parses and pays.
 
 | Endpoint | Price | Status |
 |----------|-------|--------|
-| `POST /api/predictions` | 2.0 USDC | **Live** — frontend signs proof via MetaMask (x402.org facilitator, Base Sepolia) |
+| `POST /api/predictions` | 2.0 USDC | **Live** — frontend signs proof via MetaMask (x402.org facilitator, Injective EVM testnet chain 888) |
 | `GET /api/insights/{id}` | 3.0 USDC | **Live** — backend enforces; surfaced in Match Detail "Premium Insights" panel (MetaMask x402 pay) |
 | `POST /api/wallet/withdraw` | 0.5 USDC | Stubbed |
 
-**Implementation:** `backend/app/services/x402.py` — uses the `x402[fastapi,evm]` Python SDK with the free x402.org facilitator for testnet payment verification. Falls back to dev-mode passthrough when no payment recipient is configured. Frontend: `src/x402Client.ts`, `src/api.ts` (`getPaymentFetch()`), `src/components/ConnectPayment.tsx`.
+**Implementation:** `backend/app/services/x402.py` — uses the `x402[fastapi,evm]` Python SDK with the free x402.org facilitator for testnet payment verification (network `eip155:888`, Injective EVM testnet). Falls back to dev-mode passthrough when no payment recipient is configured. Frontend: `src/x402Client.ts` (pinned to Injective EVM chain 888), `src/api.ts` (`getPaymentFetch()`), `src/components/ConnectPayment.tsx` (the single wallet button).
 
-**Config (production):** set `X402_PAYMENT_RECIPIENT` to a real **Base Sepolia** (`eip155:84532`) address holding USDC — the signed payment settles to that address on Base Sepolia. The facilitator is `https://x402.org/facilitator` (testnet).
+**Config (production):** set `X402_PAYMENT_RECIPIENT` to a real **Injective EVM** (`eip155:888`) address — your Injective EVM `0x` address (the one MetaMask shows after you add the Injective EVM testnet), **not** the `inj1` Cosmos address. The signed payment settles to that address on the Injective EVM testnet. `X402_NETWORK` is already `eip155:888` in `backend/app/services/x402.py`. The facilitator is `https://x402.org/facilitator` (testnet) — confirm it supports chain 888 before relying on real on-chain enforcement; otherwise leave the recipient unset for dev-mode passthrough.
 
 ### 🌉 CCTP — Cross-Chain USDC Transfers
 
@@ -182,6 +182,8 @@ npm run dev
 
 Open http://localhost:5173
 
+> **Wallet setup:** PredictGoal uses a single MetaMask wallet as both your account and the x402 fee payer. Add the **Injective EVM testnet** to MetaMask before connecting: Network Name `Injective EVM Testnet`, RPC URL `https://testnet.evm.injective.network`, Chain ID `888`, Currency `INJ`. The 2 / 3 USDC fee is paid there.
+
 ### Agent Skills
 ```bash
 # Copy to Claude Code or Cursor skills directory
@@ -259,8 +261,8 @@ predictgoal/
     └── src/
         ├── App.tsx              # Router + navbar + wallet state
         ├── api.ts               # API client
-        ├── components/
-        │   └── ConnectWallet.tsx # Set Address button
+        └── components/
+        │   └── ConnectPayment.tsx # Single MetaMask wallet (account + x402 payer)
         └── pages/               # Matches, MatchDetail, Leaderboard, Wallet
 ```
 

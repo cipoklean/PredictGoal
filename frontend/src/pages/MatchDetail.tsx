@@ -229,8 +229,8 @@ export default function MatchDetailPage() {
               </button>
             ) : (
               <ConnectPayment
-                label="⚡ Connect Payments to Unlock (3.0 USDC)"
-                hint="Connect MetaMask (Base Sepolia) to pay 3.0 USDC when you unlock. Connecting does not charge anything."
+                label="Connect Wallet to Unlock (3.0 USDC)"
+                hint="Connect MetaMask (Injective EVM testnet) to pay 3.0 USDC when you unlock. Connecting does not charge anything."
                 onConnected={() => bumpPayment((x) => x + 1)}
               />
             )}
@@ -297,8 +297,8 @@ export default function MatchDetailPage() {
           {!isPaymentConnected() && (
             <div className="mb-5 rounded-xl bg-[rgba(245,166,35,0.04)] border border-[rgba(245,166,35,0.12)] p-4">
               <ConnectPayment
-                label="⚡ Connect Payments to Predict (2.0 USDC)"
-                hint="Connect MetaMask (Base Sepolia) to pay the 2.0 USDC platform fee when you place a prediction. Connecting does not charge anything."
+                label="Connect Wallet to Predict (2.0 USDC)"
+                hint="Connect MetaMask (Injective EVM testnet) to pay the 2.0 USDC platform fee when you place a prediction. Connecting does not charge anything."
                 onConnected={() => bumpPayment((x) => x + 1)}
               />
             </div>

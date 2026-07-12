@@ -10,6 +10,9 @@ interface Props {
   hint?: string;
   // Called after connect/disconnect so the parent can re-render (does NOT change identity).
   onConnected?: () => void;
+  // Called with the connected address — this IS the user's single account
+  // (identity = payer). The parent should store it as the active address.
+  onAccountSet?: (addr: string) => void;
 }
 
 // MetaMask connect button that enables x402 payment signing for predictions/insights.
@@ -41,6 +44,7 @@ export default function ConnectPayment({
       const a = await connectPaymentWallet();
       setAddr(a);
       setConnected(true);
+      onAccountSet?.(a);
       onConnected?.();
     } catch (e: any) {
       setError(e?.message || "Failed to connect wallet");
@@ -80,7 +84,7 @@ export default function ConnectPayment({
         className="flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-[#f5a623] to-[#f7c948] text-black text-xs font-bold px-3 py-2 hover:from-[#e09412] hover:to-[#e6b73a] active:scale-[0.97] transition shadow-[0_0_12px_rgba(245,166,35,0.25)] disabled:opacity-60 mx-auto"
         title={error || "Connect MetaMask to pay predictions/insights with x402"}
       >
-        {busy ? "Connecting…" : (label || "⚡ Connect Payments")}
+        {busy ? "Connecting…" : (label || "Connect Wallet")}
       </button>
       {hint && <p className="mt-2 text-[11px] text-[#7b7f92] max-w-xs mx-auto leading-relaxed">{hint}</p>}
       {error && <p className="mt-2 text-[11px] text-[#ea2261] font-semibold">{error}</p>}

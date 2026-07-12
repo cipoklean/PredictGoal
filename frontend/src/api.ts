@@ -2,15 +2,47 @@ import { getPaymentFetch, getPaymentAddress, isPaymentConnected } from "./x402Cl
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
-let _walletAddress = "";
+// Canonical account identity is the user's "Set Address" (navbar identity),
+// persisted so it survives page refresh and wallet (dis)connect.
+// The MetaMask / x402 wallet is ONLY a payment signer — it must NEVER be used
+// as the account key, otherwise bets & balance flip to a different backend user
+// the moment the payment wallet is disconnected.
+const LS_KEY = "predictgoal_address";
+
+function _loadSavedAddress(): string {
+  try {
+    if (typeof localStorage !== "undefined") {
+      return localStorage.getItem(LS_KEY) || "";
+    }
+  } catch {
+    /* localStorage unavailable — fall through */
+  }
+  return "";
+}
+
+let _walletAddress = _loadSavedAddress();
 
 export function setWalletAddress(addr: string) {
   _walletAddress = addr;
+  try {
+    if (typeof localStorage !== "undefined") {
+      if (addr) localStorage.setItem(LS_KEY, addr);
+      else localStorage.removeItem(LS_KEY);
+    }
+  } catch {
+    /* ignore persistence errors */
+  }
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const send = getPaymentFetch() ?? fetch;
-  const userAddr = isPaymentConnected() ? getPaymentAddress() : _walletAddress;
+  // Identity = the "Set Address" the user chose as their account. The MetaMask
+  // (x402) wallet is ONLY a payment signer and must NOT be the account key —
+  // otherwise bets/balance flip to a different backend user the moment the
+  // payment wallet is disconnected. Fall back to the payment address only when
+  // no Set Address has been chosen yet (keeps MetaMask-only betting working in
+  // the current session).
+  const userAddr = _walletAddress || (isPaymentConnected() ? getPaymentAddress() : "");
   const res = await send(`${API_BASE}${url}`, {
     headers: {
       "Content-Type": "application/json",

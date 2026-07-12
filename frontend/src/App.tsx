@@ -1,9 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
-import ConnectWallet from "./components/ConnectWallet";
 import ConnectPayment from "./components/ConnectPayment";
 import { setWalletAddress as updateApiWallet } from "./api";
-import { disconnectPaymentWallet } from "./x402Client";
 import MatchesPage from "./pages/Matches";
 import MatchDetailPage from "./pages/MatchDetail";
 import LeaderboardPage from "./pages/Leaderboard";
@@ -13,13 +11,11 @@ const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
 function Navbar({
   walletAddress,
-  onConnect,
-  onDisconnect,
+  onAccountSet,
   balance,
 }: {
   walletAddress: string;
-  onConnect: (addr: string) => void;
-  onDisconnect: () => void;
+  onAccountSet: (addr: string) => void;
   balance: number | null;
 }) {
   const location = useLocation();
@@ -61,8 +57,7 @@ function Navbar({
             </span>
           )}
 
-          <ConnectWallet address={walletAddress} onConnect={onConnect} onDisconnect={onDisconnect} />
-          <ConnectPayment showConnectButton={false} />
+          <ConnectPayment showConnectButton={true} onAccountSet={onAccountSet} />
         </div>
       </div>
     </nav>
@@ -70,7 +65,13 @@ function Navbar({
 }
 
 export default function App() {
-  const [walletAddress, setWalletAddress] = useState("");
+  const [walletAddress, setWalletAddress] = useState<string>(() => {
+    try {
+      return localStorage.getItem("predictgoal_address") || "";
+    } catch {
+      return "";
+    }
+  });
   const [balance, setBalance] = useState<number | null>(null);
 
   const fetchBalance = useCallback(async (addr: string) => {
@@ -87,16 +88,13 @@ export default function App() {
     }
   }, []);
 
-  const handleConnect = (addr: string) => {
+  // Single wallet: the connected MetaMask address is the user's account
+  // (identity = payer). It's persisted to localStorage, so disconnecting the
+  // wallet only stops payment signing — bets & balance stay visible.
+  const handleAccountSet = (addr: string) => {
     setWalletAddress(addr);
     updateApiWallet(addr);
     fetchBalance(addr);
-  };
-
-  const handleDisconnect = () => {
-    disconnectPaymentWallet();
-    setWalletAddress("");
-    setBalance(null);
   };
 
   // Poll balance every 10s while wallet is connected
@@ -106,10 +104,20 @@ export default function App() {
     return () => clearInterval(interval);
   }, [walletAddress, fetchBalance]);
 
+  // Restore the persisted address (localStorage) on first load so a page
+  // refresh doesn't drop the account and hide bets/balance.
+  useEffect(() => {
+    if (walletAddress) {
+      updateApiWallet(walletAddress);
+      fetchBalance(walletAddress);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-[#0a0b14] text-[#e8eaf0]">
-        <Navbar walletAddress={walletAddress} onConnect={handleConnect} onDisconnect={handleDisconnect} balance={balance} />
+        <Navbar walletAddress={walletAddress} onAccountSet={handleAccountSet} balance={balance} />
         <main className="py-10">
           <Routes>
             <Route path="/" element={<MatchesPage />} />

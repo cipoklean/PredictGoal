@@ -1,11 +1,13 @@
 """
-x402 payment verification — real Injective testnet micropayments.
+x402 payment verification — real Injective EVM testnet micropayments.
 
 Uses the x402.org facilitator (free, testnet-only) to verify
 payments made in USDC on EVM-compatible chains.
 
-For the hackathon: payments on Base Sepolia testnet (eip155:84532)
-or Injective EVM testnet. The facilitator is free — no API key needed.
+For the hackathon: payments are settled on the Injective EVM testnet
+(chain ID 888, eip155:888). Users connect MetaMask with the Injective
+EVM testnet network added, so the 2/3 USDC fee is paid "on Injective".
+The facilitator is free — no API key needed.
 """
 
 import logging
@@ -28,9 +30,11 @@ X402_PRICING: dict[str, float] = {
 X402_PAYMENT_RECIPIENT: str = ""
 X402_PROTOCOL_FEE_BPS: int = 50
 
-# Network: Injective testnet (EVM-compatible, chain ID 888)
-# Or Base Sepolia (eip155:84532) for broader testnet support
-X402_NETWORK = "eip155:84532"  # Base Sepolia testnet
+# Network: Injective EVM testnet (chain ID 888). Users add the Injective EVM
+# testnet network to MetaMask and pay the fee there, so predictions are settled
+# "on Injective". X402_PAYMENT_RECIPIENT must be an EVM (0x) address on this
+# chain — i.e. your Injective EVM address, not the inj1 Cosmos address.
+X402_NETWORK = "eip155:888"  # Injective EVM testnet
 
 # x402 server instance (lazy init)
 _x402_server: Optional[object] = None

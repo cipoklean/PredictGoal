@@ -11,8 +11,20 @@
 
 import { wrapFetchWithPaymentFromConfig } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm";
-import { createWalletClient, custom, type WalletClient } from "viem";
-import { baseSepolia } from "viem/chains";
+import { createWalletClient, custom, defineChain, type WalletClient } from "viem";
+
+// Injective EVM testnet — the chain the x402 fee is paid on (chain ID 888).
+// Users add this network to MetaMask so the prediction fee settles "on
+// Injective" rather than on a foreign L2.
+export const injectiveEvmTestnet = defineChain({
+  id: 888,
+  name: "Injective EVM Testnet",
+  nativeCurrency: { name: "INJ", symbol: "INJ", decimals: 18 },
+  rpcUrls: {
+    default: { http: ["https://testnet.evm.injective.network"] },
+  },
+  testnet: true,
+});
 
 type AnyFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -44,12 +56,13 @@ export async function connectPaymentWallet(): Promise<string> {
   const addr = accounts?.[0];
   if (!addr) throw new Error("No account authorized in wallet.");
 
-  // viem wallet client backed by the injected MetaMask provider. The x402
-  // client selects the network (eip155:*) from the server's 402 requirements,
-  // so we don't pin a single chain here.
+  // viem wallet client backed by the injected MetaMask provider, pinned to the
+  // Injective EVM testnet (chain 888) so MetaMask switches to the right network
+  // and the signed fee tx settles on Injective. The x402 client still selects
+  // the exact network (eip155:888) from the server's 402 requirements.
   const walletClient = createWalletClient({
     account: addr as `0x${string}`,
-    chain: baseSepolia,
+    chain: injectiveEvmTestnet,
     transport: custom(eth),
   }) as WalletClient;
 
