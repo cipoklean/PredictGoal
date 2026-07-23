@@ -98,7 +98,7 @@ export default function WalletPage({ walletAddress }: Props) {
                 testnet.faucet.injective.network
               </a>
             </p>
-            <p className="text-[11px] text-[#4d5063] mt-2">Predictions cost 0.1 USDC each &middot; Max 100 USDC &middot; Zero real funds</p>
+            <p className="text-[11px] text-[#4d5063] mt-2">Predictions cost 2.0 USDC each (x402 fee) &middot; Max 100 USDC stake &middot; Zero real funds</p>
           </div>
         </div>
       </div>

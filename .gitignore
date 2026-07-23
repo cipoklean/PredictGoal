@@ -33,3 +33,8 @@ Thumbs.db
 .env.local
 .env.production
 SPEC.md
+
+.vercel
+.env*
+!.env.example
+!backend/.env.example

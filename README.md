@@ -1,8 +1,8 @@
 # ⚽ PredictGoal — World Cup Prediction Market + AI Analytics
 
-**Hackathon:** The Injective Global Cup (Jul 3–19, 2026)
+**Hackathon:** The Injective Global Cup (Jul 3–26, 2026)
 **Built with:** x402, CCTP, MCP Server, Agent Skills
-**Live:** [predictgoal.onrender.com](https://predictgoal.onrender.com) (backend) | Vercel (frontend)
+**Live:** [Replit (backend)](https://206c7395-fbf5-4c31-8e1e-29869be0e5f1-00-aj5c7akdsj57.kirk.replit.dev/api) | [Vercel (frontend)](https://predict-goal-red.vercel.app/)
 **Tests:** 30 passing (24 backend + 6 MCP)
 
 A non-custodial, micro-stakes prediction market for World Cup 2026 matches with real-time AI-powered win probabilities — built on Injective's newest technologies. **Testnet only. Zero real funds.**
